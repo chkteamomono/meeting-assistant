@@ -157,6 +157,53 @@
   .banner { width:100%; max-width:760px; background:#fdecea; color:#c0392b; border:1px solid #f5c6c0;
             border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; display:none; }
 
+  /* 회의록 완성 후 "노션 업로드용 자료" 패널 + 모달 */
+  .minutes-ready {
+    width:100%; max-width:760px; background:#eafaf1; border:1px solid #abebc6; border-radius:12px;
+    padding:14px 16px; margin-bottom:14px; display:none; align-items:center; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
+  }
+  .minutes-ready.show { display:flex; }
+  .minutes-ready .t { font-size:13.5px; color:#1e8449; font-weight:700; }
+  .minutes-ready .f { font-size:11.5px; color:#1e8449; opacity:.8; margin-top:2px; }
+  .minutes-ready button {
+    border:0; border-radius:9px; padding:9px 16px; font-family:inherit; font-size:13px;
+    font-weight:700; cursor:pointer; background:#1e8449; color:#fff; white-space:nowrap;
+  }
+
+  .modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(44,62,80,.45); z-index:100;
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-box {
+    background:#fff; border-radius:16px; width:100%; max-width:720px; max-height:85vh;
+    display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.25);
+  }
+  .modal-box .mhead {
+    display:flex; align-items:center; justify-content:space-between; padding:16px 20px;
+    border-bottom:1px solid var(--line);
+  }
+  .modal-box .mhead h3 { font-size:15px; color:var(--navy); }
+  .modal-box .mhead .x { border:0; background:none; font-size:20px; cursor:pointer; color:var(--muted); line-height:1; }
+  .modal-box .mhint {
+    font-size:12px; color:var(--muted); padding:10px 20px 0; line-height:1.6;
+  }
+  .modal-box textarea {
+    flex:1; margin:12px 20px; min-height:320px; font-family:Consolas,monospace; font-size:12.5px;
+    line-height:1.6; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    resize:vertical; color:var(--ink); background:#fbfcfd;
+  }
+  .modal-box .mfoot {
+    display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid var(--line);
+  }
+  .modal-box .mfoot button {
+    border:0; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13.5px;
+    font-weight:700; cursor:pointer;
+  }
+  .modal-box .mfoot .copy { background:var(--navy); color:#fff; }
+  .modal-box .mfoot .close { background:#f0f2f4; color:var(--ink); }
+
   #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:10px; z-index:50; }
   .toast {
     width:340px; color:#fff; border-radius:12px; padding:14px 16px;
@@ -179,6 +226,29 @@
   </header>
 
   <div id="banner" class="banner"></div>
+
+  <div id="minutesReady" class="minutes-ready">
+    <div>
+      <div class="t">📝 회의록이 완성됐습니다</div>
+      <div class="f" id="minutesReadyFile"></div>
+    </div>
+    <button onclick="openNotionModal()">📋 노션 업로드용 자료 생성</button>
+  </div>
+
+  <div id="notionModalOverlay" class="modal-overlay">
+    <div class="modal-box">
+      <div class="mhead">
+        <h3>📋 노션 업로드용 자료</h3>
+        <button class="x" onclick="closeNotionModal()">✕</button>
+      </div>
+      <div class="mhint">아래 내용을 전체 선택해서(또는 "복사하기" 버튼으로) 복사한 뒤, 노션 페이지에 그대로 붙여넣으세요 — 제목·목록·표가 자동으로 서식에 맞게 들어갑니다.</div>
+      <textarea id="notionModalText" readonly onclick="this.select()"></textarea>
+      <div class="mfoot">
+        <button class="close" onclick="closeNotionModal()">닫기</button>
+        <button id="copyNotionBtn" class="copy" onclick="copyNotionContent()">복사하기</button>
+      </div>
+    </div>
+  </div>
 
   <div class="panel">
     <div class="titlebar">
@@ -267,6 +337,36 @@ function fmt(sec){
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function openNotionModal(){
+  const ta = document.getElementById('notionModalText');
+  ta.value = '불러오는 중…';
+  document.getElementById('notionModalOverlay').classList.add('show');
+  try{
+    const r = await (await fetch('/api/minutes')).json();
+    ta.value = r.ok ? (r.body || '(내용 없음)') : ('불러오지 못했습니다: ' + (r.error || ''));
+  }catch(e){
+    ta.value = '서버와 통신 실패: ' + e;
+  }
+}
+
+function closeNotionModal(){
+  document.getElementById('notionModalOverlay').classList.remove('show');
+}
+
+async function copyNotionContent(){
+  const ta = document.getElementById('notionModalText');
+  ta.select();
+  try{
+    await navigator.clipboard.writeText(ta.value);
+  }catch(e){
+    document.execCommand('copy');  // 클립보드 API가 막혀 있을 때 대비한 구식 방식
+  }
+  const btn = document.getElementById('copyNotionBtn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ 복사됨';
+  setTimeout(()=>{ btn.textContent = orig; }, 1500);
 }
 
 async function toggle(){
@@ -582,6 +682,17 @@ async function poll(){
     // 마지막 else에서 "지금은 아무 문제도, 알릴 것도 없다"면 명시적으로 숨긴다 —
     // 안 그러면(예전 코드) 마이크 에러가 나중에 복구돼도 배너 문구가 그대로 남아있었다.
     const mn = st.minutes || {};
+
+    // 회의록이 준비되면 "노션 업로드용 자료" 패널을 보여준다. 새 회의를 시작하면
+    // (running true) 지난 회의록 패널은 숨긴다 — 안 그러면 새 회의 중에도 지난
+    // 회의록 버튼이 계속 떠 있어서 헷갈린다.
+    const minutesPanel = document.getElementById('minutesReady');
+    if(!running && mn.status === 'ready' && mn.file){
+      minutesPanel.classList.add('show');
+      document.getElementById('minutesReadyFile').textContent = mn.file;
+    }else{
+      minutesPanel.classList.remove('show');
+    }
     const ns = st.notion || {};
     if(!st.claude_ok){
       showBanner('Claude Code CLI를 찾을 수 없어요. `claude --version` 확인 후 서버를 다시 실행하세요.');
