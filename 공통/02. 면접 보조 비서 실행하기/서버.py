@@ -106,11 +106,9 @@ def is_stage_dir(name: str) -> bool:
 
 
 def find_root() -> Path:
-    """'참고자료' 폴더를 품은 상위 폴더를 '인사관리 보조' 루트로 본다."""
-    for d in (HERE, *HERE.parents):
-        if (d / "참고자료").is_dir():
-            return d
-    return HERE.parent
+    """코드(공통/)와 데이터(면접/)가 분리된 구조 — 고정된 상대 위치로 데이터 루트를 가리킨다.
+    HERE = <저장소 루트>/공통/02. 면접 보조 비서 실행하기"""
+    return HERE.parent.parent / "면접"
 
 
 def find_log_dir(root: Path) -> Path:
@@ -1416,6 +1414,14 @@ def index():
 @app.route("/settings")
 def settings_page():
     return send_from_directory(HERE, "settings.html")
+
+
+@app.route("/api/settings")
+def api_settings():
+    """저장 위치는 폴더 구조로 자동 탐색되고 바꿀 수 없다 — 설정 화면에는 지금
+    어디에 저장되고 있는지만 보여준다."""
+    return jsonify({"log_dir": str(LOG_DIR), "root": str(ROOT)})
+
 
 @app.route("/api/candidates")
 def api_candidates():

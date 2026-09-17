@@ -36,6 +36,9 @@
   .result { font-size:12.5px; line-height:1.6; margin-top:10px; padding:9px 11px; border-radius:8px; display:none; }
   .result.ok { display:block; background:#eafaf1; color:#1e8449; }
   .result.err { display:block; background:#fdecea; color:#c0392b; }
+
+  .current { font-size:12px; color:var(--ink); background:#f7f9fa; border-radius:8px;
+             padding:7px 10px; word-break:break-all; }
 </style>
 </head>
 <body>
@@ -44,6 +47,15 @@
     <div><h1>설정</h1></div>
     <a class="back" href="/">← 면접으로 돌아가기</a>
   </header>
+
+  <div class="panel">
+    <h2>📁 저장 위치</h2>
+    <div class="desc">
+      이력서·맞춤질문·면접 대화록·요약·평가가 지원자별 폴더에 저장되는 위치입니다. 폴더
+      구조("03. 면접자 정보" 등)로 자동 탐색되며, 여기서 바꿀 수는 없습니다.
+    </div>
+    <div class="current" id="logDir">확인 중…</div>
+  </div>
 
   <div class="panel">
     <h2>⏻ 프로그램 종료</h2>
@@ -63,6 +75,16 @@ function showResult(id, ok, msg){
   el.textContent = msg;
   el.className = 'result ' + (ok ? 'ok' : 'err');
 }
+
+async function loadSettings(){
+  try{
+    const s = await (await fetch('/api/settings')).json();
+    document.getElementById('logDir').textContent = s.log_dir;
+  }catch(e){
+    document.getElementById('logDir').textContent = '서버와 통신하지 못했습니다.';
+  }
+}
+loadSettings();
 
 async function shutdownServer(){
   if(!confirm('면접 보조 비서를 종료할까요? 진행 중인 면접이 있다면 먼저 종료해두세요.')) return;

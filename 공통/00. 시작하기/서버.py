@@ -44,7 +44,7 @@ APPS = {
     },
     "interview": {
         "label": "면접 보조 비서",
-        "server": ROOT / "면접" / "02. 면접 보조 비서 실행하기" / "서버.py",
+        "server": ROOT / "02. 면접 보조 비서 실행하기" / "서버.py",
         "port": 8000,
     },
 }

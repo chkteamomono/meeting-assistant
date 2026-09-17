@@ -92,11 +92,9 @@ MEMO_PREFIX = "메모_"
 
 
 def find_root() -> Path:
-    """'참고자료' 폴더를 품은 상위 폴더를 '회의 보조 에이전트' 루트로 본다."""
-    for d in (HERE, *HERE.parents):
-        if (d / "참고자료").is_dir():
-            return d
-    return HERE.parent
+    """코드(공통/)와 데이터(회의관리/)가 분리된 구조 — 고정된 상대 위치로 데이터 루트를 가리킨다.
+    HERE = <저장소 루트>/공통/02. 회의 보조 비서 실행하기"""
+    return HERE.parent.parent / "회의관리"
 
 
 ROOT = find_root()
