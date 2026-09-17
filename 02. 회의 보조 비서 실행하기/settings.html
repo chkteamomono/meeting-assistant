@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회의 보조 비서 — 설정</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:#2c3e50; --green:#27ae60; --red:#e74c3c; --amber:#f39c12;
+    --ink:#34495e; --muted:#95a5a6; --line:#e5e9ec; --bg:#f4f6f8;
+  }
+  body {
+    font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; padding:24px 16px 40px;
+  }
+  header { width:100%; max-width:640px; display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  header .logo { font-size:26px; }
+  header h1 { font-size:20px; color:var(--navy); }
+  header .back { margin-left:auto; font-size:13px; color:var(--muted); text-decoration:none; }
+  header .back:hover { color:var(--navy); }
+
+  .panel {
+    width:100%; max-width:640px; background:#fff; border-radius:16px;
+    box-shadow:0 4px 20px rgba(44,62,80,.08); padding:22px; margin-bottom:18px;
+  }
+  .panel h2 { font-size:15px; color:var(--navy); margin-bottom:4px; }
+  .panel .desc { font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
+
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:13px; font-weight:700; color:var(--navy); margin-bottom:6px; }
+  .field input {
+    width:100%; font-family:inherit; font-size:14px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink);
+  }
+  .field .hint { font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.6; }
+  .field .current { font-size:12px; color:var(--ink); background:#f7f9fa; border-radius:8px;
+                     padding:7px 10px; margin-top:6px; word-break:break-all; }
+
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  button {
+    border:0; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13.5px;
+    font-weight:700; cursor:pointer; background:var(--navy); color:#fff;
+  }
+  button.ghost { background:#f0f2f4; color:var(--ink); }
+  button.test { background:#eef4fb; color:#2c5aa0; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+
+  .result { font-size:12.5px; line-height:1.6; margin-top:10px; padding:9px 11px; border-radius:8px; display:none; }
+  .result.ok { display:block; background:#eafaf1; color:#1e8449; }
+  .result.err { display:block; background:#fdecea; color:#c0392b; }
+
+  .steps { font-size:12px; color:var(--ink); line-height:1.8; background:#f7f9fa; border-radius:10px;
+           padding:12px 14px; margin-top:14px; }
+  .steps b { color:var(--navy); }
+  .steps ol { margin-left:18px; margin-top:4px; }
+
+  .switch-row { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .switch-row .label { font-size:13.5px; font-weight:700; color:var(--navy); }
+  .switch { position:relative; width:44px; height:26px; flex:none; }
+  .switch input { opacity:0; width:0; height:0; }
+  .switch .track {
+    position:absolute; inset:0; background:#d5dbe0; border-radius:999px; cursor:pointer; transition:.15s;
+  }
+  .switch .track::before {
+    content:''; position:absolute; width:20px; height:20px; left:3px; top:3px;
+    background:#fff; border-radius:50%; transition:.15s; box-shadow:0 1px 3px rgba(0,0,0,.2);
+  }
+  .switch input:checked + .track { background:var(--green); }
+  .switch input:checked + .track::before { transform:translateX(18px); }
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙️</span>
+    <div><h1>설정</h1></div>
+    <a class="back" href="/">← 회의로 돌아가기</a>
+  </header>
+
+  <div class="panel">
+    <h2>📁 회의 기록 저장 위치</h2>
+    <div class="desc">녹취록·회의록·안건판이 저장되는 폴더입니다. 비워두면 기본 위치(앱 폴더 아래 "03. 회의 기록")를 씁니다.</div>
+    <div class="field">
+      <label for="saveDir">저장 폴더 경로</label>
+      <input id="saveDir" type="text" placeholder="예: D:\회의록 (비워두면 기본 위치)">
+      <div class="current" id="currentDir">현재 적용 중: 확인 중…</div>
+      <div class="hint">폴더가 없으면 자동으로 만듭니다. 외장 드라이브처럼 연결이 끊길 수 있는 위치를 지정하면, 연결이 끊긴 동안은 자동으로 기본 위치에 저장됩니다.</div>
+    </div>
+    <div class="row">
+      <button onclick="saveDirSettings()">저장</button>
+      <button class="ghost" onclick="resetSaveDir()">기본값으로</button>
+    </div>
+    <div class="result" id="dirResult"></div>
+  </div>
+
+  <div class="panel">
+    <h2>🪄 보정 작업</h2>
+    <div class="desc">
+      실시간 받아쓰기는 속도가 우선이라 10초씩 끊어서 처리해 문장 경계에서 오탈자가 잘 생깁니다.
+      이 기능을 켜면 같은 녹음을 60초 단위로 더 크게 묶어 별도 스레드에서 다시 한번 받아써서
+      오탈자를 줄인 "보정본"을 만듭니다. 화면의 실시간 자막에는 반영되지 않고(끊겨 보이는 걸 막기
+      위함), 회의가 끝나면 이 보정본으로 회의록을 작성하고 별도 파일로도 저장합니다. 회의 중
+      원본 음성 파일도 함께 저장됩니다.
+    </div>
+    <div class="switch-row">
+      <span class="label">보정 작업 사용</span>
+      <label class="switch">
+        <input type="checkbox" id="correctionToggle" onchange="saveCorrectionSetting()">
+        <span class="track"></span>
+      </label>
+    </div>
+    <div class="hint" style="margin-top:10px;">
+      실시간 받아쓰기와 동시에 두 번째 받아쓰기가 돌아가는 것이라 CPU를 더 씁니다 — 컴퓨터가
+      느려지거나 실시간 자막이 자주 밀리면 꺼두세요(꺼도 실시간 받아쓰기·회의록 작성 자체는
+      그대로 됩니다. 다만 회의록은 실시간본 기준으로 작성됩니다).
+    </div>
+    <div class="result" id="correctionResult"></div>
+  </div>
+
+  <div class="panel">
+    <h2>🗂️ 노션 연동</h2>
+    <div class="desc">회의가 끝나고 회의록이 만들어지면, 지정한 노션 페이지에 그 내용을 그대로 이어서 작성합니다. 둘 다 입력해야 작동합니다.</div>
+    <div class="field">
+      <label for="notionUrl">노션 페이지 주소</label>
+      <input id="notionUrl" type="text" placeholder="https://www.notion.so/워크스페이스/페이지제목-xxxxxxxx...">
+      <div class="hint">회의록을 이어붙일 노션 페이지를 열어서 주소창의 URL을 그대로 복사해 붙여넣으세요.</div>
+    </div>
+    <div class="field">
+      <label for="notionKey">노션 API 키 (Integration Secret)</label>
+      <input id="notionKey" type="password" placeholder="저장된 값이 있으면 비워두면 유지됩니다">
+      <div class="hint" id="keyStatus"></div>
+    </div>
+    <div class="row">
+      <button onclick="saveNotionSettings()">저장</button>
+      <button class="test" onclick="testNotion()">연결 테스트</button>
+    </div>
+    <div class="result" id="notionResult"></div>
+
+    <div class="steps">
+      <b>처음 연동하는 경우 — 준비 방법</b>
+      <ol>
+        <li>노션에서 <b>notion.so/my-integrations</b> 페이지로 이동해 "새 통합 만들기"로 통합을 하나 만드세요.</li>
+        <li>만들어진 통합의 <b>"내부 통합 비밀번호(Secret)"</b>를 복사해 위 "노션 API 키"에 붙여넣으세요.</li>
+        <li>회의록을 받을 노션 페이지를 열고, 우측 상단 "···" 메뉴 → <b>"연결 추가"</b>에서 방금 만든 통합을 선택해 이 페이지에 연결하세요. (이 단계를 빼먹으면 API 키가 맞아도 "페이지를 찾을 수 없습니다" 오류가 납니다.)</li>
+        <li>그 페이지 주소를 위 "노션 페이지 주소"에 붙여넣고 저장 → "연결 테스트"로 확인하세요.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>⏻ 프로그램 종료</h2>
+    <div class="desc">이제 창을 띄우지 않고 실행되기 때문에, 끌 때는 여기서 끕니다. (안 눌러도 컴퓨터를 끄면 함께 종료됩니다)</div>
+    <button style="background:var(--red)" onclick="shutdownServer()">서버 종료</button>
+    <div class="result" id="shutdownResult"></div>
+  </div>
+
+<script>
+function showResult(id, ok, msg){
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'result ' + (ok ? 'ok' : 'err');
+}
+
+async function loadSettings(){
+  try{
+    const s = await (await fetch('/api/settings')).json();
+    document.getElementById('saveDir').value = s.save_dir || '';
+    document.getElementById('currentDir').textContent = '현재 적용 중: ' + s.current_save_dir;
+    document.getElementById('notionUrl').value = s.notion_page_url || '';
+    document.getElementById('keyStatus').textContent = s.notion_api_key_set
+      ? ('저장된 키: ' + s.notion_api_key_masked + ' (그대로 두면 유지됩니다)')
+      : '아직 저장된 키가 없습니다.';
+    document.getElementById('correctionToggle').checked = s.correction_enabled !== false;
+  }catch(e){
+    document.getElementById('currentDir').textContent = '서버와 통신하지 못했습니다.';
+  }
+}
+
+async function saveDirSettings(){
+  try{
+    const r = await (await fetch('/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ save_dir: document.getElementById('saveDir').value })
+    })).json();
+    if(r.ok){
+      document.getElementById('currentDir').textContent = '현재 적용 중: ' + r.current_save_dir;
+      showResult('dirResult', true, '저장했습니다.');
+    }else{
+      showResult('dirResult', false, r.error || '저장하지 못했습니다.');
+    }
+  }catch(e){ showResult('dirResult', false, '서버와 통신 실패: ' + e); }
+}
+
+async function resetSaveDir(){
+  try{
+    const r = await (await fetch('/api/settings/reset_save_dir', { method:'POST' })).json();
+    document.getElementById('saveDir').value = '';
+    document.getElementById('currentDir').textContent = '현재 적용 중: ' + r.current_save_dir;
+    showResult('dirResult', true, '기본 위치로 되돌렸습니다.');
+  }catch(e){ showResult('dirResult', false, '서버와 통신 실패: ' + e); }
+}
+
+async function saveCorrectionSetting(){
+  const enabled = document.getElementById('correctionToggle').checked;
+  try{
+    const r = await (await fetch('/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ correction_enabled: enabled })
+    })).json();
+    if(r.ok){
+      showResult('correctionResult', true, enabled ? '보정 작업을 켰습니다.' : '보정 작업을 껐습니다.');
+    }else{
+      showResult('correctionResult', false, r.error || '저장하지 못했습니다.');
+    }
+  }catch(e){ showResult('correctionResult', false, '서버와 통신 실패: ' + e); }
+}
+
+async function saveNotionSettings(){
+  try{
+    const r = await (await fetch('/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        notion_page_url: document.getElementById('notionUrl').value,
+        notion_api_key: document.getElementById('notionKey').value
+      })
+    })).json();
+    if(r.ok){
+      showResult('notionResult', true, '저장했습니다. "연결 테스트"로 확인해보세요.');
+      document.getElementById('notionKey').value = '';
+      loadSettings();
+    }else{
+      showResult('notionResult', false, r.error || '저장하지 못했습니다.');
+    }
+  }catch(e){ showResult('notionResult', false, '서버와 통신 실패: ' + e); }
+}
+
+async function testNotion(){
+  try{
+    const r = await (await fetch('/api/settings/test_notion', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        notion_page_url: document.getElementById('notionUrl').value,
+        notion_api_key: document.getElementById('notionKey').value
+      })
+    })).json();
+    if(r.ok){
+      showResult('notionResult', true, `연결 성공 — 대상 페이지: "${r.page_title}"`);
+    }else{
+      showResult('notionResult', false, r.error || '연결하지 못했습니다.');
+    }
+  }catch(e){ showResult('notionResult', false, '서버와 통신 실패: ' + e); }
+}
+
+async function shutdownServer(){
+  if(!confirm('회의 보조 비서를 종료할까요? 진행 중인 회의가 있다면 먼저 종료해두세요.')) return;
+  try{
+    await fetch('/api/shutdown', { method:'POST' });
+    showResult('shutdownResult', true, '종료했습니다. 이 탭은 이제 닫으셔도 됩니다.');
+  }catch(e){
+    // 서버가 죽으면서 연결이 끊기는 게 정상 — 에러로 보이지만 성공한 것
+    showResult('shutdownResult', true, '종료했습니다. 이 탭은 이제 닫으셔도 됩니다.');
+  }
+}
+
+loadSettings();
+</script>
+</body>
+</html>

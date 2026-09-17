@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회의 보조 비서</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:#2c3e50; --green:#27ae60; --red:#e74c3c; --amber:#f39c12;
+    --ink:#34495e; --muted:#95a5a6; --line:#e5e9ec; --bg:#f4f6f8;
+  }
+  body {
+    font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; padding:24px 16px 40px;
+  }
+  header { width:100%; max-width:760px; display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  header .logo { font-size:26px; }
+  header h1 { font-size:20px; color:var(--navy); }
+  header .sub { font-size:12px; color:var(--muted); margin-left:2px; }
+  header .settings-link {
+    margin-left:auto; text-decoration:none; color:var(--navy);
+    display:flex; align-items:center; gap:6px;
+    padding:9px 16px; border-radius:10px; background:#fff; border:1px solid var(--line);
+    font-size:13px; font-weight:700; box-shadow:0 1px 3px rgba(44,62,80,.06);
+  }
+  header .settings-link:hover { border-color:var(--navy); background:#f7f9fa; }
+
+  .panel {
+    width:100%; max-width:760px; background:#fff; border-radius:16px;
+    box-shadow:0 4px 20px rgba(44,62,80,.08); padding:22px; margin-bottom:18px;
+  }
+
+  .control { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+  .status { display:flex; align-items:center; gap:10px; }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--muted); }
+  .dot.on { background:var(--green); box-shadow:0 0 0 4px rgba(39,174,96,.15); }
+  .status .txt { font-size:15px; font-weight:700; }
+  .timer { font-family:Consolas,monospace; font-size:30px; font-weight:700; color:var(--navy); letter-spacing:1px; }
+
+  button.main {
+    border:0; border-radius:12px; padding:14px 26px; font-size:16px; font-weight:800;
+    color:#fff; cursor:pointer; background:var(--green); transition:.15s; min-width:150px;
+  }
+  button.main.stop { background:var(--red); }
+  button.main.pause { background:var(--amber); min-width:120px; }
+  button.main.resume { background:var(--green); min-width:120px; }
+  button.main:active { transform:translateY(1px); }
+  button.main:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* 회의 제목 입력줄 */
+  .titlebar { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+              padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--line); }
+  .titlebar label { font-size:13px; font-weight:700; color:var(--navy); }
+  .titlebar input {
+    flex:1; min-width:220px; font-family:inherit; font-size:14px; padding:9px 11px;
+    border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink);
+  }
+  .titlebar input:disabled { background:#f7f9fa; color:var(--muted); cursor:not-allowed; }
+  .titlebar .rs { font-size:12px; color:var(--muted); width:100%; }
+
+  .counters { display:flex; gap:12px; margin-top:20px; }
+  .card { flex:1; border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center; background:#fff; }
+  .card .n { font-size:28px; font-weight:800; color:var(--navy); }
+  .card .l { font-size:12px; color:var(--muted); margin-top:2px; }
+  .card.decided .n { color:var(--green); }
+  .card.actions .n { color:var(--amber); }
+
+  /* 안건 패널 (핵심 — 항상 맨 위에 노출) */
+  .agenda-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .agenda-head h2 { font-size:16px; color:var(--navy); }
+  .agenda-head .clear { font-size:12px; color:var(--muted); background:none; border:0; cursor:pointer; text-decoration:underline; }
+  .agenda-hint { font-size:12px; color:var(--muted); line-height:1.6; background:#f7f9fa;
+                 border-radius:9px; padding:10px 12px; margin-bottom:14px; }
+  .board-empty { color:var(--muted); font-size:13px; text-align:center; padding:24px 0; }
+
+  .agenda-card { border:1px solid var(--line); border-left-width:5px; border-radius:12px;
+                 padding:14px 16px; margin-bottom:12px; background:#fbfcfd; }
+  .agenda-card.discussing { border-left-color:var(--amber); }
+  .agenda-card.decided { border-left-color:var(--green); }
+  .agenda-card.pending { border-left-color:var(--muted); }
+  .agenda-card .head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .agenda-card .t {
+    font-size:15px; font-weight:800; color:var(--navy); flex:1; cursor:text;
+    padding:3px 6px; border-radius:6px; border:1px solid transparent;
+  }
+  .agenda-card .t:hover { border-color:var(--line); background:#fff; }
+  .agenda-card .t-input {
+    flex:1; font-family:inherit; font-size:15px; font-weight:800; color:var(--navy);
+    padding:2px 5px; border:1px solid var(--navy); border-radius:6px;
+  }
+  .agenda-card .badge { font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; color:#fff; white-space:nowrap; }
+  .agenda-card.discussing .badge { background:var(--amber); }
+  .agenda-card.decided .badge { background:var(--green); }
+  .agenda-card.pending .badge { background:var(--muted); }
+  .agenda-card .src { font-size:10px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 7px; white-space:nowrap; }
+  .agenda-card .del { border:0; background:none; cursor:pointer; color:var(--muted); font-size:15px; padding:0 3px; line-height:1; }
+  .agenda-card .del:hover { color:var(--red); }
+  .agenda-card .summary { font-size:13.5px; line-height:1.6; color:var(--ink); margin-bottom:6px; }
+  .agenda-card .summary.empty { color:var(--muted); font-style:italic; }
+  .agenda-card .decision { font-size:13.5px; line-height:1.6; color:#1e8449; background:#eafaf1;
+                            border-radius:8px; padding:8px 10px; margin-bottom:6px; }
+  .agenda-card .decision b { margin-right:4px; }
+  .agenda-card .actions { font-size:12.5px; color:var(--ink); }
+  .agenda-card .actions .ai { padding:4px 0; border-top:1px dashed var(--line); }
+  .agenda-card .actions .ai:first-child { border-top:0; }
+
+  .agenda-add { display:flex; gap:8px; margin-top:6px; }
+  .agenda-add input {
+    flex:1; font-family:inherit; font-size:14px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink);
+  }
+  .agenda-add button {
+    border:0; border-radius:9px; padding:0 18px; background:var(--navy); color:#fff;
+    font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;
+  }
+
+  /* 안건 카드 — 요약·결정 편집 모드 */
+  .body-view { cursor:text; border-radius:8px; padding:2px 4px; border:1px solid transparent; }
+  .body-view:hover { border-color:var(--line); background:#fff; }
+  .edit-box { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; }
+  .edit-box textarea {
+    width:100%; font-family:inherit; font-size:13.5px; line-height:1.6; color:var(--ink);
+    border:1px solid var(--navy); border-radius:8px; padding:8px 10px; resize:vertical; min-height:64px;
+  }
+  .edit-box .drow { display:flex; align-items:center; gap:8px; }
+  .edit-box .drow label { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .edit-box .drow input {
+    flex:1; font-family:inherit; font-size:13px; padding:6px 9px;
+    border:1px solid var(--line); border-radius:7px;
+  }
+  .edit-box .brow { display:flex; gap:8px; justify-content:flex-end; }
+  .edit-box .brow button {
+    border:0; border-radius:7px; padding:6px 14px; font-family:inherit; font-size:12.5px;
+    font-weight:700; cursor:pointer;
+  }
+  .edit-box .save { background:var(--navy); color:#fff; }
+  .edit-box .cancel { background:#f0f2f4; color:var(--ink); }
+
+  /* 메모 패널 */
+  .notes-box textarea {
+    width:100%; min-height:120px; font-family:inherit; font-size:13.5px; line-height:1.7;
+    color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:12px 14px; resize:vertical;
+  }
+  .notes-save { font-size:11px; color:var(--muted); margin-top:6px; text-align:right; }
+
+  .caption-box { min-height:64px; }
+  .caption-box h3 { font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:700; }
+  .correction-tag { font-weight:700; color:#2c5aa0; background:#eef4fb; border-radius:999px;
+                     padding:2px 8px; font-size:10.5px; margin-left:4px; }
+  #captions { font-size:13.5px; line-height:1.7; color:var(--ink); max-height:180px; overflow-y:auto; }
+  #captions .line { padding:2px 0; border-bottom:1px dashed var(--line); }
+  #captions .empty { color:var(--muted); }
+
+  .hint { width:100%; max-width:760px; font-size:12px; color:var(--muted); line-height:1.7; }
+  .banner { width:100%; max-width:760px; background:#fdecea; color:#c0392b; border:1px solid #f5c6c0;
+            border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; display:none; }
+
+  #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:10px; z-index:50; }
+  .toast {
+    width:340px; color:#fff; border-radius:12px; padding:14px 16px;
+    box-shadow:0 6px 24px rgba(44,62,80,.25); animation:pop .2s ease-out;
+  }
+  .toast.new { background:var(--amber); }
+  .toast.decided { background:var(--green); }
+  .toast .t { font-weight:800; font-size:14px; margin-bottom:4px; }
+  .toast .q { font-size:13px; line-height:1.5; }
+  @keyframes pop { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">📝</span>
+    <div>
+      <h1>회의 보조 비서 <span class="sub">안건을 먼저 정하고, 회의 내용은 실시간으로 채워집니다</span></h1>
+    </div>
+    <a class="settings-link" href="/settings" title="설정 — 저장 위치 / 노션 연동 / 보정 작업">⚙️ 설정</a>
+  </header>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="panel">
+    <div class="titlebar">
+      <label for="company">🏢 회의 기업/상대</label>
+      <input id="company" type="text" placeholder="예: 러닝스파크 (없으면 비워두세요)">
+    </div>
+    <div class="titlebar">
+      <label for="topic">📋 회의 주제</label>
+      <input id="topic" type="text" placeholder="예: AI교육센터 파일럿 프로그램 개발 사업 (비워두면 '회의')">
+      <div class="rs">「날짜_기업_주제」 형식으로 <b>03. 회의 기록</b> 폴더에 저장됩니다.</div>
+    </div>
+
+    <div class="control">
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusTxt" class="txt">대기 중</span>
+      </div>
+      <div id="timer" class="timer">00:00:00</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="pauseBtn" class="main pause" onclick="togglePause()" style="display:none">⏸ 일시정지</button>
+        <button id="btn" class="main" onclick="toggle()">▶ 회의 시작</button>
+      </div>
+    </div>
+
+    <div class="counters">
+      <div class="card"><div class="n" id="cItems">0</div><div class="l">📌 안건 수</div></div>
+      <div class="card decided"><div class="n" id="cDecided">0</div><div class="l">✅ 결정됨</div></div>
+      <div class="card actions"><div class="n" id="cActions">0</div><div class="l">☑ 액션 아이템</div></div>
+    </div>
+  </div>
+
+  <!-- 안건 — 항상 맨 위, 언제든 편집 가능 -->
+  <div class="panel">
+    <div class="agenda-head">
+      <h2>📌 오늘 회의 안건</h2>
+      <button class="clear" onclick="clearAgenda()">전체 지우기</button>
+    </div>
+    <div class="agenda-hint">
+      회의 시작 전 오늘 다룰 안건을 적어두세요. 제목을 누르면 <b>바로 수정</b>할 수 있고,
+      회의 중에도 언제든 추가·수정·삭제할 수 있습니다. 논의 요약·결정 사항은 회의가 진행되면서
+      25~30초 안팎마다 자동으로 채워집니다. 목록에 없던 주제가 나오면 새 카드가 자동으로 추가됩니다.
+    </div>
+    <div id="boardBody"><div class="board-empty">불러오는 중…</div></div>
+    <div class="agenda-add">
+      <input id="newAgendaTitle" type="text" placeholder="새 안건 제목 입력 후 Enter" onkeydown="if(event.key==='Enter') addAgenda()">
+      <button onclick="addAgenda()">+ 추가</button>
+    </div>
+  </div>
+
+  <div class="panel notes-box">
+    <h3 style="font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:700;">🗒️ 메모</h3>
+    <textarea id="notesArea" placeholder="안건에 안 묶이는 메모, 나중에 확인할 것, 받아쓰기로 안 남는 내용 등을 자유롭게 적어두세요. 회의 종료 시 회의록에 함께 반영됩니다." oninput="scheduleNotesSave()"></textarea>
+    <div class="notes-save" id="notesSaveState"></div>
+  </div>
+
+  <div class="panel caption-box">
+    <h3>🎤 실시간 받아쓰기 <span id="correctionTag" class="correction-tag"></span></h3>
+    <div id="captions"><div class="empty">회의를 시작하면 들리는 내용이 여기에 표시됩니다.</div></div>
+  </div>
+
+  <div class="hint">
+    · 이 창은 같은 PC에서만 접속됩니다(localhost). 음성은 PC 밖으로 나가지 않습니다.<br>
+    · 새 안건이 잡히거나 결정이 나면 우측 아래에 알림이 뜹니다.<br>
+    · 안건의 요약·결정 사항 글을 누르면 오탈자를 직접 고칠 수 있습니다.<br>
+    · 회의처럼 마이크에서 자리가 떨어져 있으면 인식률이 떨어질 수 있어요 — 가능하면 마이크를 화자들 가까이에 두세요.<br>
+    · 회의 종료를 누르면 <b>03. 회의 기록/{날짜}_{기업}_{주제}</b> 폴더에 녹취록·메모·안건 스냅샷·회의록이 저장됩니다 (회의록은 1~2분 뒤 완성).
+  </div>
+
+  <div id="toasts"></div>
+
+<script>
+let running = false;
+let wasRunning = false;  // 회의가 방금 "진행중 → 종료"로 바뀐 순간을 잡아 캡션 창을 비우기 위함
+let capEmpty = true;
+let minutesWasRunning = false;
+let lastNotionStatus = 'idle';
+let editingId = null;      // 지금 제목을 편집 중인 안건 id
+let editingBodyId = null;  // 지금 요약·결정을 편집 중인 안건 id
+
+function fmt(sec){
+  const h=String(Math.floor(sec/3600)).padStart(2,'0');
+  const m=String(Math.floor(sec%3600/60)).padStart(2,'0');
+  const s=String(sec%60).padStart(2,'0');
+  return `${h}:${m}:${s}`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function toggle(){
+  const btn = document.getElementById('btn');
+  const companyInput = document.getElementById('company');
+  const topicInput = document.getElementById('topic');
+  btn.disabled = true;
+  try{
+    if(!running){
+      const r = await (await fetch('/api/start',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({company: companyInput.value||'', topic: topicInput.value||''})
+      })).json();
+      if(!r.ok){ showBanner(r.error || '시작 실패'); }
+      else{ minutesWasRunning = false; lastNotionStatus = 'idle'; }  // 다음 회의의 회의록/노션 알림을 새로 받기 위한 초기화
+    }else{
+      const r = await (await fetch('/api/stop',{method:'POST'})).json();
+      if(r.dir){ showBanner('회의 기록을 저장했어요. 회의록은 1~2분 뒤 같은 폴더에 만들어집니다.', true); }
+    }
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+  btn.disabled = false;
+}
+
+let paused = false;
+async function togglePause(){
+  const btn = document.getElementById('pauseBtn');
+  btn.disabled = true;
+  try{
+    const url = paused ? '/api/resume' : '/api/pause';
+    const r = await (await fetch(url, {method:'POST'})).json();
+    paused = !!r.paused;
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+  btn.disabled = false;
+}
+
+/* ── 메모 (안건에 안 묶이는 자유 메모) ───────────── */
+let notesSaveTimer = null;
+async function loadNotes(){
+  try{
+    const r = await (await fetch('/api/notes')).json();
+    document.getElementById('notesArea').value = r.text || '';
+  }catch(e){ /* 무시 */ }
+}
+function scheduleNotesSave(){
+  const st = document.getElementById('notesSaveState');
+  st.textContent = '입력 중…';
+  clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(saveNotes, 800);
+}
+async function saveNotes(){
+  const text = document.getElementById('notesArea').value;
+  const st = document.getElementById('notesSaveState');
+  try{
+    await fetch('/api/notes',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    st.textContent = '저장됨 ✓';
+    setTimeout(()=>{ if(st.textContent==='저장됨 ✓') st.textContent=''; }, 2000);
+  }catch(e){ st.textContent = '저장 실패'; }
+}
+
+/* ── 안건 추가/수정/삭제 ─────────────────────── */
+async function addAgenda(){
+  const input = document.getElementById('newAgendaTitle');
+  const title = input.value.trim();
+  if(!title) return;
+  input.value = '';
+  try{
+    const r = await (await fetch('/api/agenda/add',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({title})
+    })).json();
+    if(!r.ok){ showBanner(r.error || '안건 추가 실패'); return; }
+    await refreshAgenda();
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+}
+
+async function updateAgendaTitle(id, title){
+  title = title.trim();
+  if(!title) return;
+  try{
+    await fetch('/api/agenda/update',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id, title})
+    });
+    await refreshAgenda();
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+}
+
+async function updateAgendaBody(id, summary, decision){
+  try{
+    await fetch('/api/agenda/update',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id, summary: summary.trim(), decision: decision.trim()})
+    });
+    editingBodyId = null;
+    await refreshAgenda();
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+}
+
+async function deleteAgenda(id){
+  try{
+    await fetch('/api/agenda/delete',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    await refreshAgenda();
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+}
+
+async function clearAgenda(){
+  if(!confirm('오늘 회의 안건을 전부 지울까요? (회의 중이면 지금까지의 요약도 함께 사라집니다)')) return;
+  try{
+    await fetch('/api/agenda/clear',{method:'POST'});
+    await refreshAgenda();
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+}
+
+async function refreshAgenda(){
+  try{
+    const r = await (await fetch('/api/agenda')).json();
+    renderBoard(r.items||[]);
+  }catch(e){ /* 다음 polling에서 다시 시도 */ }
+}
+
+function startEdit(id, el){
+  editingId = id;
+  const input = document.createElement('input');
+  input.className = 't-input';
+  input.value = el.textContent;
+  input.onclick = e => e.stopPropagation();
+  input.onkeydown = e => {
+    if(e.key === 'Enter'){ input.blur(); }
+    if(e.key === 'Escape'){ editingId = null; renderBoard(lastItems); }
+  };
+  input.onblur = () => { editingId = null; updateAgendaTitle(id, input.value); };
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function startEditBody(id){
+  editingBodyId = id;
+  renderBoard(lastItems);
+}
+
+function cancelEditBody(){
+  editingBodyId = null;
+  renderBoard(lastItems);
+}
+
+function saveEditBody(id){
+  const s = document.getElementById('editSummary_'+id);
+  const d = document.getElementById('editDecision_'+id);
+  updateAgendaBody(id, s.value, d.value);
+}
+
+function statusLabel(s){
+  if(s === 'decided') return { cls:'decided', txt:'결정' };
+  if(s === 'pending') return { cls:'pending', txt:'보류' };
+  return { cls:'discussing', txt:'논의 중' };
+}
+
+let lastItems = [];
+function renderBoard(items){
+  lastItems = items || [];
+  const box = document.getElementById('boardBody');
+  if(!items || !items.length){
+    box.innerHTML = '<div class="board-empty">아직 안건이 없습니다. 아래 입력창에서 오늘 다룰 안건을 추가해 보세요.</div>';
+    return;
+  }
+  box.innerHTML = items.map(it=>{
+    const st = statusLabel(it.status);
+    const srcBadge = it.source === 'auto' ? '<span class="src">자동 감지</span>' : '';
+    const idAttr = escapeHtml(it.id);
+
+    const actions = (it.action_items||[]).map(a=>{
+      const who = a.owner ? escapeHtml(a.owner) : '담당 미정';
+      const due = a.due ? ` · ${escapeHtml(a.due)}` : '';
+      return `<div class="ai">☑ ${escapeHtml(a.task||'')} — ${who}${due}</div>`;
+    }).join('');
+    const actionsBlock = actions ? `<div class="actions">${actions}</div>` : '';
+
+    let bodyHtml;
+    if(it.id === editingBodyId){
+      bodyHtml = `<div class="edit-box">
+          <textarea id="editSummary_${idAttr}" placeholder="논의 요약">${escapeHtml(it.summary||'')}</textarea>
+          <div class="drow">
+            <label>✅ 결정 사항</label>
+            <input id="editDecision_${idAttr}" value="${escapeHtml(it.decision||'')}" placeholder="없으면 비워두세요">
+          </div>
+          <div class="brow">
+            <button class="cancel" onclick="cancelEditBody()">취소</button>
+            <button class="save" onclick="saveEditBody('${idAttr}')">저장</button>
+          </div>
+        </div>`;
+    }else{
+      const decision = it.decision
+        ? `<div class="decision"><b>✅ 결정</b>${escapeHtml(it.decision)}</div>` : '';
+      const summary = it.summary
+        ? `<div class="summary">${escapeHtml(it.summary)}</div>`
+        : `<div class="summary empty">아직 논의되지 않았습니다.</div>`;
+      bodyHtml = `<div class="body-view" onclick="startEditBody('${idAttr}')">${summary}${decision}</div>`;
+    }
+
+    return `<div class="agenda-card ${st.cls}" data-id="${idAttr}">
+              <div class="head">
+                <span class="t" onclick="startEdit('${idAttr}', this)">${escapeHtml(it.title||'')}</span>
+                ${srcBadge}
+                <span class="badge">${st.txt}</span>
+                <button class="del" title="삭제" onclick="deleteAgenda('${idAttr}')">✕</button>
+              </div>
+              ${bodyHtml}${actionsBlock}
+            </div>`;
+  }).join('');
+}
+
+// 배너는 "지금 이 조건이 맞으면 계속 보여주는" 것(마이크 에러 등)과
+// "이 순간 딱 한 번만 알리는" 것(회의록/노션 완료 등)이 섞여 있다. poll()은 1초마다
+// 돌아서, 알림성 배너를 띄운 바로 다음 폴링에서 "지금은 문제 없다"고 판단해 곧장
+// 지워버리면 사람이 읽기도 전에 사라진다. 그래서 모든 배너는 최소 노출 시간을
+// 보장하고, 그 시간이 지나야만 poll()의 "문제 없으면 숨기기"가 개입한다.
+let bannerAutoHideUntil = 0;
+const BANNER_MIN_VISIBLE_MS = 5000;
+
+function showBanner(msg, ok){
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.style.display = 'block';
+  b.style.background = ok ? '#eafaf1' : '#fdecea';
+  b.style.color = ok ? '#1e8449' : '#c0392b';
+  b.style.borderColor = ok ? '#abebc6' : '#f5c6c0';
+  bannerAutoHideUntil = Date.now() + BANNER_MIN_VISIBLE_MS;
+  if(ok){ setTimeout(()=>{ b.style.display='none'; }, BANNER_MIN_VISIBLE_MS); }
+}
+
+function hideBanner(){
+  if(Date.now() < bannerAutoHideUntil) return;
+  document.getElementById('banner').style.display = 'none';
+}
+
+function addToast(n){
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  if(n.type === 'decided'){
+    el.className = 'toast decided';
+    el.innerHTML = `<div class="t">✅ 결정 — ${escapeHtml(n.title||'')}</div><div class="q">${escapeHtml(n.decision||'')}</div>`;
+  }else{
+    el.className = 'toast new';
+    el.innerHTML = `<div class="t">🆕 새 안건</div><div class="q">${escapeHtml(n.title||'')}</div>`;
+  }
+  box.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 7000);
+}
+
+function addCaption(text){
+  const box = document.getElementById('captions');
+  if(capEmpty){ box.innerHTML=''; capEmpty=false; }
+  const line = document.createElement('div');
+  line.className='line';
+  line.textContent = text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  while(box.children.length > 80) box.removeChild(box.firstChild);
+}
+
+async function poll(){
+  try{
+    const st = await (await fetch('/api/state')).json();
+    running = st.running;
+
+    if(wasRunning && !running){
+      // 회의가 방금 끝났다 — 화면에 남은 캡션이 "지금도 계속 받아쓰는 중"처럼 보이는
+      // 걸 막기 위해 비워둔다. 방금 끝난 회의 전문은 녹취록 파일에 이미 저장돼 있다.
+      const box = document.getElementById('captions');
+      box.innerHTML = '<div class="empty">회의를 시작하면 들리는 내용이 여기에 표시됩니다.</div>';
+      capEmpty = true;
+    }
+    wasRunning = running;
+
+    const dot=document.getElementById('dot'), stx=document.getElementById('statusTxt'), btn=document.getElementById('btn');
+    paused = !!st.paused;
+    const pauseBtn = document.getElementById('pauseBtn');
+    if(running){
+      dot.classList.add('on');
+      if(paused){
+        stx.textContent = (st.title ? `${st.title} — ` : '') + '일시정지됨';
+        pauseBtn.textContent = '▶ 재개'; pauseBtn.classList.add('resume');
+      }else{
+        stx.textContent = st.title ? `${st.title} 진행 중` : '진행 중';
+        pauseBtn.textContent = '⏸ 일시정지'; pauseBtn.classList.remove('resume');
+      }
+      pauseBtn.style.display = 'inline-block';
+      btn.textContent='⏹ 회의 종료'; btn.classList.add('stop');
+    }else{
+      dot.classList.remove('on');
+      stx.textContent = st.whisper_ready ? '대기 중' : '준비 중(음성모델 로딩)…';
+      pauseBtn.style.display = 'none';
+      btn.textContent='▶ 회의 시작'; btn.classList.remove('stop');
+    }
+
+    document.getElementById('company').disabled = running;
+    document.getElementById('topic').disabled = running;
+
+    document.getElementById('timer').textContent = fmt(st.elapsed||0);
+    document.getElementById('cItems').textContent = st.counters.items||0;
+    document.getElementById('cDecided').textContent = st.counters.decided||0;
+    document.getElementById('cActions').textContent = st.counters.actions||0;
+
+    // 배너는 한 곳에만 뜰 수 있으니, 아래 조건을 우선순위 순서로 하나만 고른다.
+    // 마지막 else에서 "지금은 아무 문제도, 알릴 것도 없다"면 명시적으로 숨긴다 —
+    // 안 그러면(예전 코드) 마이크 에러가 나중에 복구돼도 배너 문구가 그대로 남아있었다.
+    const mn = st.minutes || {};
+    const ns = st.notion || {};
+    if(!st.claude_ok){
+      showBanner('Claude Code CLI를 찾을 수 없어요. `claude --version` 확인 후 서버를 다시 실행하세요.');
+    }else if(st.audio && !st.audio.ok && st.audio.error){
+      showBanner('🎤 마이크를 열지 못했습니다: ' + st.audio.error + ' — 자동으로 재시도 중입니다.');
+    }else if(mn.status === 'running'){
+      showBanner('📝 회의록을 만드는 중입니다 (1~2분 안팎) — 완성되면 회의 기록 폴더에 저장됩니다');
+      minutesWasRunning = true;
+    }else if(minutesWasRunning && mn.status === 'ready'){
+      minutesWasRunning = false;
+      showBanner('📝 회의록이 완성됐습니다 → ' + (mn.file||''), true);
+    }else if(minutesWasRunning && mn.status === 'error'){
+      minutesWasRunning = false;
+      showBanner('회의록을 만들지 못했습니다: ' + (mn.error||''));
+    }else if(ns.status === 'running'){
+      showBanner('🗂️ 노션 페이지에 회의록을 쓰는 중입니다…');
+      lastNotionStatus = 'running';
+    }else if(ns.status === 'ready' && lastNotionStatus !== 'ready'){
+      lastNotionStatus = 'ready';
+      showBanner('🗂️ 노션 페이지에 회의록을 작성했습니다.', true);
+    }else if(ns.status === 'error' && lastNotionStatus !== 'error'){
+      lastNotionStatus = 'error';
+      showBanner('🗂️ 노션에 쓰지 못했습니다: ' + (ns.error||'') + ' (설정에서 다시 확인하세요)');
+    }else if(st.no_sound_warning){
+      showBanner('🎤 ' + st.no_sound_warning);
+    }else{
+      hideBanner();
+    }
+
+    const corrTag = document.getElementById('correctionTag');
+    const corrStatus = (st.correction||{}).status;
+    if(running && corrStatus === 'running'){ corrTag.textContent = '보정 작업 처리 중…'; }
+    else if(running && corrStatus === 'idle'){ corrTag.textContent = '보정 대기'; }
+    else{ corrTag.textContent = ''; }
+
+    (st.captions||[]).forEach(addCaption);
+    (st.notices||[]).forEach(addToast);
+
+    // 제목/요약을 편집 중일 때는 화면을 덮어쓰지 않는다 (입력 중 끊김 방지)
+    if(editingId === null && editingBodyId === null) renderBoard(st.board||[]);
+  }catch(e){ /* 서버 재시작 중 등 — 조용히 무시 */ }
+}
+refreshAgenda();
+loadNotes();
+setInterval(poll, 1000);
+poll();
+</script>
+</body>
+</html>
