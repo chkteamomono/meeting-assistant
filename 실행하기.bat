@@ -37,6 +37,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo.
+echo 데이터 폴더를 확인하는 중입니다...
+python "폴더_초기설정.py"
+
 REM pythonw.exe(콘솔 없는 파이썬)로 백그라운드에서 띄운다 — 검은 창이 남지 않는다.
 REM 이 cmd 창 자체는 start로 띄우자마자 바로 닫힌다.
 start "" pythonw.exe "서버.py"
