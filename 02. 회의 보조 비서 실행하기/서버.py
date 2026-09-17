@@ -1331,9 +1331,11 @@ def api_resume():
 
 @app.route("/api/start", methods=["POST"])
 def api_start():
+    """claude CLI가 없어도 회의는 시작할 수 있다 — 실시간 받아쓰기(Whisper)는 클로드와
+    무관하게 동작하는 별개 기능이라, CLI 하나 없다고 이 앱 전체를 못 쓰게 막을 이유가
+    없다. 다만 안건 자동 정리·회의록 자동 생성은 claude CLI가 있어야만 되고(board_loop,
+    save_minutes에서 각각 확인), 그건 화면 배너("claude_ok": false)로 안내된다."""
     global session_start, session_transcripts, minutes_state, current_meeting, total_paused
-    if not CLAUDE_CLI:
-        return jsonify({"ok": False, "error": "claude 명령어(Claude Code CLI)를 찾을 수 없어요. Claude Code 설치·로그인 후 다시 시도하세요."})
     if not running.is_set():
         paused.clear()
         total_paused = 0.0
@@ -1612,7 +1614,9 @@ def main():
     print("=" * 50)
 
     if not CLAUDE_CLI:
-        print("\n⚠️  Claude Code CLI가 없습니다. `claude --version` 확인 후 다시 실행하세요.\n")
+        print("\n⚠️  Claude Code CLI를 찾지 못했습니다 — 실시간 받아쓰기는 그대로 되지만, "
+              "안건 자동 정리·회의록 자동 생성은 안 됩니다. 쓰려면 Claude Code 설치·로그인 "
+              "후 다시 실행하세요.\n")
 
     threading.Thread(target=audio_loop, daemon=True).start()
     threading.Thread(target=stt_loop, daemon=True).start()
