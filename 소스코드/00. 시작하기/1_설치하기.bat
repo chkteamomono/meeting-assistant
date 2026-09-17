@@ -45,7 +45,7 @@ if errorlevel 1 (
 
 echo.
 echo [3/3] 면접 보조 비서 라이브러리 설치...
-python -m pip install -r "..\면접\02. 면접 보조 비서 실행하기\requirements.txt"
+python -m pip install -r "..\02. 면접 보조 비서 실행하기\requirements.txt"
 if errorlevel 1 (
     echo.
     echo [ERROR] 면접 보조 비서 라이브러리 설치 실패.
