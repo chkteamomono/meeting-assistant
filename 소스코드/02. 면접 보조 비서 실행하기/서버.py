@@ -170,34 +170,104 @@ ASK_THRESHOLD = 0.8         # 🟡 추가 질문 제안: 0.8 이상만
 WARN_THRESHOLD = 0.5        # 🔴 차별 질문 경고: 0.5 이상
 
 # =============================================================
-# Claude CLI 자동 탐지
+# AI CLI 자동 탐지 — claude / codex / gemini 중 하나를 헤드리스로 부른다
+#
+# claude: claude -p --model <모델>            (안정적으로 검증된 기본값)
+# codex : codex exec -s read-only ...          (2026-09 연결 작업 중, ChatGPT 계정 로그인 필요)
+# gemini: gemini -p <프롬프트> -o text         (2026-09 연결 작업 중 — 아직 실제 호출로 검증 안 됨)
 # =============================================================
-def find_claude_cli() -> str | None:
-    cmd = shutil.which("claude")
+AI_PROVIDER = "claude"   # claude | codex | gemini — 바꾸려면 이 줄만 고치면 된다
+
+AI_CLI_BIN = {"claude": "claude", "codex": "codex", "gemini": "gemini"}
+
+
+def find_ai_cli(provider: str) -> str | None:
+    cmd_name = AI_CLI_BIN.get(provider, provider)
+    cmd = shutil.which(cmd_name)
     if cmd:
         return cmd
     home = Path.home()
     candidates = [
-        home / "AppData/Local/Programs/claude/claude.exe",
-        home / "AppData/Roaming/npm/claude.cmd",
-        home / "AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.cmd",
-        home / ".local/bin/claude",
+        home / f"AppData/Local/Programs/{cmd_name}/{cmd_name}.exe",
+        home / f"AppData/Roaming/npm/{cmd_name}.cmd",
+        home / f".local/bin/{cmd_name}",
     ]
+    if provider == "claude":
+        candidates.append(
+            home / "AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.cmd")
     for c in candidates:
         if c.exists():
             return str(c)
-    vscode_ext = home / ".vscode/extensions"
-    if vscode_ext.exists():
-        for ext_dir in sorted(vscode_ext.glob("anthropic.claude-code-*"), reverse=True):
-            for sub in ("resources/native-binary/claude.exe",
-                        "resources/native-binary/claude",
-                        "claude.exe"):
-                p = ext_dir / sub
-                if p.exists():
-                    return str(p)
+    if provider == "claude":
+        # 클로드 코드는 VS Code 확장에 내장된 바이너리로도 깔릴 수 있다
+        vscode_ext = home / ".vscode/extensions"
+        if vscode_ext.exists():
+            for ext_dir in sorted(vscode_ext.glob("anthropic.claude-code-*"), reverse=True):
+                for sub in ("resources/native-binary/claude.exe",
+                            "resources/native-binary/claude",
+                            "claude.exe"):
+                    p = ext_dir / sub
+                    if p.exists():
+                        return str(p)
     return None
 
-CLAUDE_CLI = find_claude_cli()
+
+AI_CLI = find_ai_cli(AI_PROVIDER)
+
+# claude/codex/gemini CLI는 대개 .cmd 배치 파일이라(예: claude.CMD), 실행하려면 Windows가
+# 내부적으로 cmd.exe를 띄워야 한다. 이 서버 자체가 콘솔 없이(pythonw) 떠 있을 때는 물려받을
+# 콘솔이 없어서, 호출할 때마다 새 콘솔 창이 잠깐씩 나타났다 사라진다 — CREATE_NO_WINDOW로
+# 그 창 자체를 아예 안 만들게 막는다. (회의 보조 비서에서 먼저 확인된 수정사항을 반영)
+CLI_CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def call_ai_cli(prompt: str, *, tier: str = "default", timeout: int = CLAUDE_TIMEOUT,
+                 image_path: Path | None = None, allow_read: bool = False) -> str:
+    """AI_PROVIDER에 맞는 CLI를 헤드리스로 불러 프롬프트를 넣고 최종 텍스트를 받는다.
+
+    tier="ocr"이면 클로드는 OCR_MODEL을 쓴다. image_path를 주면(현재 codex만 지원)
+    이미지를 직접 첨부한다 — 클로드는 이미지를 첨부하는 CLI 옵션이 없어 allow_read=True로
+    Read 도구를 열어주고, 프롬프트 쪽에서 경로를 직접 알려줘야 한다(ocr_page 참고).
+    codex/gemini는 아직 모델 이름을 지정하지 않는다 — 틀린 모델 이름을 짐작해서 넣느니,
+    로그인된 계정의 기본 모델을 그대로 쓰는 게 안전하다.
+    """
+    if AI_PROVIDER == "codex":
+        cmd = [AI_CLI, "exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never"]
+        if image_path:
+            cmd += ["-i", str(image_path)]
+        with tempfile.TemporaryDirectory() as td:
+            out_file = Path(td) / "결과.txt"
+            cmd += ["-o", str(out_file)]
+            subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+                creationflags=CLI_CREATIONFLAGS,
+            )
+            return out_file.read_text(encoding="utf-8") if out_file.exists() else ""
+
+    if AI_PROVIDER == "gemini":
+        # gemini -p는 프롬프트를 인자로 받는다 — 이력서·받아쓰기처럼 아주 긴 프롬프트는
+        # Windows 명령줄 길이 제한에 걸릴 수 있어 아직 검증 전이다. 이미지 첨부 방식도
+        # 확인 전이라 image_path는 지원하지 않는다.
+        result = subprocess.run(
+            [AI_CLI, "-p", prompt, "-o", "text"],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+            creationflags=CLI_CREATIONFLAGS,
+        )
+        return result.stdout or ""
+
+    # 기본값: claude
+    model = OCR_MODEL if tier == "ocr" else CLAUDE_MODEL
+    cmd = [AI_CLI, "-p", "--model", model]
+    if allow_read:
+        cmd += ["--allowedTools", "Read"]
+    result = subprocess.run(
+        cmd, input=prompt, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+        creationflags=CLI_CREATIONFLAGS,
+    )
+    return result.stdout or ""
 
 # =============================================================
 # 시스템 프롬프트 (tkinter 버전과 동일)
@@ -583,13 +653,7 @@ def call_claude_cli(user_text: str, history: list[str], alerted: list[str]) -> s
         f"[방금 발언]\n{user_text}\n\n"
         "위 [방금 발언]을 JSON 한 객체로만 응답하세요. 설명/마크다운 금지."
     )
-    result = subprocess.run(
-        [CLAUDE_CLI, "-p", "--model", CLAUDE_MODEL],
-        input=prompt, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        timeout=CLAUDE_TIMEOUT, shell=False,
-    )
-    return result.stdout or ""
+    return call_ai_cli(prompt, timeout=CLAUDE_TIMEOUT)
 
 # =============================================================
 # 스캔 이력서 자동 변환 (프로그램 실행 시 1회, 백그라운드)
@@ -614,9 +678,15 @@ def pdf_has_text(pdf: Path) -> bool:
         return True     # 못 열면 건드리지 않는다
 
 
+# 이미지를 직접 읽혀야 하는 기능(스캔 이력서 OCR)이라 아직 이 두 CLI로만 확인됨.
+# claude는 --allowedTools Read로 경로를 열게 시키고, codex는 -i로 이미지를 직접 첨부한다.
+# gemini는 이미지 첨부 방식이 아직 검증 전이라 뺐다.
+OCR_SUPPORTED_PROVIDERS = {"claude", "codex"}
+
+
 def find_scan_targets() -> list[Path]:
     """변환이 필요한 스캔 PDF 목록. 이미 .txt가 있으면 제외."""
-    if not (HAS_FITZ and CLAUDE_CLI and LOG_DIR.exists()):
+    if not (HAS_FITZ and AI_CLI and AI_PROVIDER in OCR_SUPPORTED_PROVIDERS and LOG_DIR.exists()):
         return []
     out = []
     for stage in sorted(p for p in LOG_DIR.iterdir() if p.is_dir()):
@@ -631,18 +701,17 @@ def find_scan_targets() -> list[Path]:
 
 
 def ocr_page(png: Path) -> str:
-    """이미지 한 장을 Claude에게 읽힌다."""
-    prompt = (
-        "이 이미지를 Read 도구로 열어 보이는 글자를 그대로 텍스트로 옮겨줘. "
+    """이미지 한 장을 AI에게 읽힌다."""
+    base_instruction = (
+        "이 이미지에 보이는 글자를 그대로 텍스트로 옮겨줘. "
         "추측해서 채우지 말고 보이는 대로만 쓰고, 표는 읽기 쉽게 줄로 풀어줘. "
-        f"설명 없이 본문만 출력해: {png}"
+        "설명 없이 본문만 출력해."
     )
-    r = subprocess.run(
-        [CLAUDE_CLI, "-p", "--model", OCR_MODEL, "--allowedTools", "Read"],
-        input=prompt, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=PAGE_TIMEOUT, shell=False,
-    )
-    return (r.stdout or "").strip()
+    if AI_PROVIDER == "codex":
+        return call_ai_cli(base_instruction, timeout=PAGE_TIMEOUT, image_path=png).strip()
+    # claude — 이미지를 직접 첨부하는 옵션이 없어 Read 도구로 경로를 열게 시킨다
+    prompt = f"{base_instruction} 이 이미지를 Read 도구로 열어서 확인해: {png}"
+    return call_ai_cli(prompt, tier="ocr", timeout=PAGE_TIMEOUT, allow_read=True).strip()
 
 
 def convert_scanned_pdf(pdf: Path) -> bool:
@@ -684,7 +753,7 @@ def auto_convert(quiet: bool = False):
                          "message": "PyMuPDF 미설치 — '1_설치하기.bat'을 다시 실행하면 스캔 이력서도 읽습니다"}
         print("[이력서변환] PyMuPDF 없음 — 건너뜀")
         return
-    if not CLAUDE_CLI:
+    if not AI_CLI:
         convert_state = {**convert_state, "status": "skipped",
                          "message": "Claude CLI를 찾지 못해 변환을 건너뜁니다"}
         return
@@ -811,12 +880,7 @@ def build_questions(resume: str, who: str) -> list:
         f"[지원자 이력서 — {who}]\n{resume}\n\n"
         "위 이력서를 근거로 JSON 한 객체만 출력하세요."
     )
-    r = subprocess.run(
-        [CLAUDE_CLI, "-p", "--model", CLAUDE_MODEL],
-        input=prompt, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=600, shell=False,
-    )
-    data = json.loads(extract_json(r.stdout or ""))
+    data = json.loads(extract_json(call_ai_cli(prompt, timeout=600)))
     return [
         {"q": str(it.get("q", "")).strip(), "why": str(it.get("why", "")).strip()}
         for it in data.get("items", []) if str(it.get("q", "")).strip()
@@ -844,7 +908,7 @@ def prewarm_questions():
     미리 만들어 파일로 캐시해 두면 지원자를 고르는 순간 바로 뜬다.
     """
     global prep_state
-    if not CLAUDE_CLI:
+    if not AI_CLI:
         prep_state = {**prep_state, "status": "skipped"}
         return
     cands = scan_candidates()
@@ -984,7 +1048,7 @@ def stt_loop():
                 print(f"[STT] 에러: {e}")
 
 def claude_loop():
-    if not CLAUDE_CLI:
+    if not AI_CLI:
         print("[Claude] claude 명령어를 찾지 못함 — 점검 스레드 비활성")
         return
     while not shutdown.is_set():
@@ -1110,12 +1174,7 @@ def build_report(transcript_text: str, who: str) -> str:
     prompt = (f"{REPORT_PROMPT}\n\n[채용 기준 참고]\n{JOB_INFO_TEXT}\n\n"
               f"[면접 받아쓰기 전문 — {who}]\n{transcript_text}\n\n"
               "위 형식대로 요약을 작성하세요.")
-    r = subprocess.run(
-        [CLAUDE_CLI, "-p", "--model", CLAUDE_MODEL],
-        input=prompt, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=600, shell=False,
-    )
-    return (r.stdout or "").strip()
+    return call_ai_cli(prompt, timeout=600).strip()
 
 
 def save_report(out_dir, who: str, ts: str, when_label: str, dur: str, log_snapshot: list) -> str:
@@ -1643,7 +1702,7 @@ def api_stop():
         custom_snapshot = list(custom_questions.get("items") or [])
 
         # 공유용 질문·답변 요약 + Notion 문서는 2분쯤 걸리므로 화면을 붙잡지 않고 뒤에서 만든다
-        if CLAUDE_CLI:
+        if AI_CLI:
             dur = f"{last_elapsed // 60}분 {last_elapsed % 60}초"
             threading.Thread(target=finalize_after_stop,
                              args=(out_dir, who, ts, when_label, dur,
@@ -1671,7 +1730,7 @@ def api_state():
         "running": running.is_set(),
         "paused": paused.is_set(),
         "whisper_ready": whisper_ready.is_set(),
-        "claude_ok": bool(CLAUDE_CLI),
+        "claude_ok": bool(AI_CLI),
         "elapsed": elapsed,
         "counters": counters,
         "verdicts": verdicts,
@@ -1711,9 +1770,9 @@ def main():
     print("=" * 50)
     print(f"📋 직무정보: {JOB_INFO_PATH.name if JOB_INFO_PATH.exists() else '(없음 — 일반 사무·행정직 기준)'}")
     print(f"💾 로그 위치: {LOG_DIR}")
-    print(f"🤖 모델: claude -p --model {CLAUDE_MODEL}")
+    print(f"🤖 AI 제공자: {AI_PROVIDER}" + (f" (모델: {CLAUDE_MODEL})" if AI_PROVIDER == "claude" else ""))
     print(f"🎤 STT: faster-whisper ({WHISPER_MODEL})")
-    print(f"🔗 Claude CLI: {CLAUDE_CLI or '❌ 찾지 못함'}")
+    print(f"🔗 AI CLI: {AI_CLI or '❌ 찾지 못함'}")
     stage = find_stage_dir()
     cands = scan_candidates()
     if cands:
@@ -1727,10 +1786,9 @@ def main():
     print(f"🌐 주소: http://{HOST}:{PORT}")
     print("=" * 50)
 
-    if not CLAUDE_CLI:
-        print("\n⚠️  Claude Code CLI를 찾지 못했습니다 — 실시간 받아쓰기는 그대로 되지만, "
-              "실시간 판정·맞춤 질문 생성·면접 요약은 안 됩니다. 쓰려면 Claude Code 설치·로그인 "
-              "후 다시 실행하세요.\n")
+    if not AI_CLI:
+        print(f"\n⚠️  AI_PROVIDER='{AI_PROVIDER}' CLI를 찾지 못했습니다 — 실시간 받아쓰기는 그대로 되지만, "
+              "실시간 판정·맞춤 질문 생성·면접 요약은 안 됩니다. 해당 CLI를 설치·로그인 후 다시 실행하세요.\n")
 
     threading.Thread(target=audio_loop, daemon=True).start()
     threading.Thread(target=stt_loop, daemon=True).start()

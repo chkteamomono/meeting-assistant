@@ -24,6 +24,7 @@ import shutil
 import threading
 import webbrowser
 import subprocess
+import tempfile
 import urllib.request
 import urllib.error
 import wave
@@ -210,41 +211,94 @@ def resample_to_model_rate(audio: np.ndarray) -> np.ndarray:
 
 
 # =============================================================
-# Claude CLI 자동 탐지
+# AI CLI 자동 탐지 — claude / codex / gemini 중 하나를 헤드리스로 부른다
+#
+# claude: claude -p --model <모델>            (안정적으로 검증된 기본값)
+# codex : codex exec -s read-only ...          (2026-09 연결 작업 중, ChatGPT 계정 로그인 필요)
+# gemini: gemini -p <프롬프트> -o text         (2026-09 연결 작업 중 — 아직 실제 호출로 검증 안 됨)
 # =============================================================
-def find_claude_cli() -> str | None:
-    cmd = shutil.which("claude")
+AI_PROVIDER = "claude"   # claude | codex | gemini — 바꾸려면 이 줄만 고치면 된다
+
+AI_CLI_BIN = {"claude": "claude", "codex": "codex", "gemini": "gemini"}
+
+
+def find_ai_cli(provider: str) -> str | None:
+    cmd_name = AI_CLI_BIN.get(provider, provider)
+    cmd = shutil.which(cmd_name)
     if cmd:
         return cmd
     home = Path.home()
     candidates = [
-        home / "AppData/Local/Programs/claude/claude.exe",
-        home / "AppData/Roaming/npm/claude.cmd",
-        home / "AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.cmd",
-        home / ".local/bin/claude",
+        home / f"AppData/Local/Programs/{cmd_name}/{cmd_name}.exe",
+        home / f"AppData/Roaming/npm/{cmd_name}.cmd",
+        home / f".local/bin/{cmd_name}",
     ]
+    if provider == "claude":
+        candidates.append(
+            home / "AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.cmd")
     for c in candidates:
         if c.exists():
             return str(c)
-    vscode_ext = home / ".vscode/extensions"
-    if vscode_ext.exists():
-        for ext_dir in sorted(vscode_ext.glob("anthropic.claude-code-*"), reverse=True):
-            for sub in ("resources/native-binary/claude.exe",
-                        "resources/native-binary/claude",
-                        "claude.exe"):
-                p = ext_dir / sub
-                if p.exists():
-                    return str(p)
+    if provider == "claude":
+        # 클로드 코드는 VS Code 확장에 내장된 바이너리로도 깔릴 수 있다
+        vscode_ext = home / ".vscode/extensions"
+        if vscode_ext.exists():
+            for ext_dir in sorted(vscode_ext.glob("anthropic.claude-code-*"), reverse=True):
+                for sub in ("resources/native-binary/claude.exe",
+                            "resources/native-binary/claude",
+                            "claude.exe"):
+                    p = ext_dir / sub
+                    if p.exists():
+                        return str(p)
     return None
 
 
-CLAUDE_CLI = find_claude_cli()
+AI_CLI = find_ai_cli(AI_PROVIDER)
 
-# claude CLI는 대개 .cmd 배치 파일이라(예: claude.CMD), 실행하려면 Windows가 내부적으로
-# cmd.exe를 띄워야 한다. 이 서버 자체가 콘솔 없이(pythonw) 떠 있을 때는 물려받을 콘솔이
-# 없어서, 호출할 때마다(25초 회의판 갱신 등) 새 콘솔 창이 잠깐씩 나타났다 사라진다 —
+# claude/codex/gemini CLI는 대개 .cmd 배치 파일이라(예: claude.CMD), 실행하려면 Windows가
+# 내부적으로 cmd.exe를 띄워야 한다. 이 서버 자체가 콘솔 없이(pythonw) 떠 있을 때는 물려받을
+# 콘솔이 없어서, 호출할 때마다(25초 회의판 갱신 등) 새 콘솔 창이 잠깐씩 나타났다 사라진다 —
 # CREATE_NO_WINDOW로 그 창 자체를 아예 안 만들게 막는다.
 CLI_CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def call_ai_cli(prompt: str, timeout: int = CLAUDE_TIMEOUT) -> str:
+    """AI_PROVIDER에 맞는 CLI를 헤드리스로 불러 프롬프트를 넣고 최종 텍스트를 받는다.
+
+    codex/gemini는 아직 모델 이름을 지정하지 않는다 — 틀린 모델 이름을 짐작해서
+    넣느니, 로그인된 계정의 기본 모델을 그대로 쓰는 게 안전하다.
+    """
+    if AI_PROVIDER == "codex":
+        with tempfile.TemporaryDirectory() as td:
+            out_file = Path(td) / "결과.txt"
+            subprocess.run(
+                [AI_CLI, "exec", "-s", "read-only", "--skip-git-repo-check",
+                 "--color", "never", "-o", str(out_file)],
+                input=prompt, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+                creationflags=CLI_CREATIONFLAGS,
+            )
+            return out_file.read_text(encoding="utf-8") if out_file.exists() else ""
+
+    if AI_PROVIDER == "gemini":
+        # gemini -p는 프롬프트를 인자로 받는다 — 회의록처럼 아주 긴 프롬프트는
+        # Windows 명령줄 길이 제한에 걸릴 수 있어 아직 검증 전이다.
+        result = subprocess.run(
+            [AI_CLI, "-p", prompt, "-o", "text"],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+            creationflags=CLI_CREATIONFLAGS,
+        )
+        return result.stdout or ""
+
+    # 기본값: claude
+    result = subprocess.run(
+        [AI_CLI, "-p", "--model", CLAUDE_MODEL],
+        input=prompt, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=timeout, shell=False,
+        creationflags=CLI_CREATIONFLAGS,
+    )
+    return result.stdout or ""
 
 # =============================================================
 # 시스템 프롬프트 — 안건 진행 상황 갱신용
@@ -921,14 +975,7 @@ def update_board(new_text: str):
     )
     content = ""
     try:
-        result = subprocess.run(
-            [CLAUDE_CLI, "-p", "--model", CLAUDE_MODEL],
-            input=prompt, capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
-            timeout=CLAUDE_TIMEOUT, shell=False,
-            creationflags=CLI_CREATIONFLAGS,
-        )
-        content = extract_json(result.stdout or "")
+        content = extract_json(call_ai_cli(prompt, timeout=CLAUDE_TIMEOUT))
         if not content:
             return
         data = json.loads(content)
@@ -978,7 +1025,7 @@ def update_board(new_text: str):
 
 
 def board_loop():
-    if not CLAUDE_CLI:
+    if not AI_CLI:
         print("[Claude] claude 명령어를 찾지 못함 — 안건 정리 스레드 비활성")
         return
     buffer: list[str] = []
@@ -1067,13 +1114,7 @@ def build_minutes(transcript_text: str, board_items: list, notes: str, display_t
               f"{notes_block}\n"
               f"[회의 받아쓰기 전문 — {display_title}]\n{transcript_text}\n\n"
               "위 형식대로 회의록을 작성하세요.")
-    r = subprocess.run(
-        [CLAUDE_CLI, "-p", "--model", CLAUDE_MODEL],
-        input=prompt, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=MINUTES_TIMEOUT, shell=False,
-        creationflags=CLI_CREATIONFLAGS,
-    )
-    return (r.stdout or "").strip()
+    return call_ai_cli(prompt, timeout=MINUTES_TIMEOUT).strip()
 
 
 def save_transcript(out_dir: Path, stem: str, display_title: str) -> str:
@@ -1442,7 +1483,7 @@ def api_stop():
             with notes_lock:
                 notes_snapshot = notes_text
 
-            if transcript_text.strip() and CLAUDE_CLI:
+            if transcript_text.strip() and AI_CLI:
                 threading.Thread(target=save_minutes,
                                  args=(out_dir, stem, display_title, when_label, dur,
                                        transcript_text, board_snapshot, notes_snapshot),
@@ -1501,7 +1542,7 @@ def api_state():
         "running": running.is_set(),
         "paused": paused.is_set(),
         "whisper_ready": whisper_ready.is_set(),
-        "claude_ok": bool(CLAUDE_CLI),
+        "claude_ok": bool(AI_CLI),
         "audio": audio,
         "no_sound_warning": no_sound_warning,
         "elapsed": elapsed,
@@ -1617,16 +1658,15 @@ def main():
     print("📝 회의 보조 비서 — 실시간 받아쓰기 + 안건 정리")
     print("=" * 50)
     print(f"💾 저장 위치: {current_meeting_log_dir()}")
-    print(f"🤖 모델: claude -p --model {CLAUDE_MODEL}")
+    print(f"🤖 AI 제공자: {AI_PROVIDER}" + (f" (모델: {CLAUDE_MODEL})" if AI_PROVIDER == "claude" else ""))
     print(f"🎤 STT: faster-whisper ({WHISPER_MODEL})")
-    print(f"🔗 Claude CLI: {CLAUDE_CLI or '❌ 찾지 못함'}")
+    print(f"🔗 AI CLI: {AI_CLI or '❌ 찾지 못함'}")
     print(f"🌐 주소: http://{HOST}:{PORT}")
     print("=" * 50)
 
-    if not CLAUDE_CLI:
-        print("\n⚠️  Claude Code CLI를 찾지 못했습니다 — 실시간 받아쓰기는 그대로 되지만, "
-              "안건 자동 정리·회의록 자동 생성은 안 됩니다. 쓰려면 Claude Code 설치·로그인 "
-              "후 다시 실행하세요.\n")
+    if not AI_CLI:
+        print(f"\n⚠️  AI_PROVIDER='{AI_PROVIDER}' CLI를 찾지 못했습니다 — 실시간 받아쓰기는 그대로 되지만, "
+              "안건 자동 정리·회의록 자동 생성은 안 됩니다. 해당 CLI를 설치·로그인 후 다시 실행하세요.\n")
 
     threading.Thread(target=audio_loop, daemon=True).start()
     threading.Thread(target=stt_loop, daemon=True).start()

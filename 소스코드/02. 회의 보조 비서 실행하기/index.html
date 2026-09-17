@@ -696,7 +696,7 @@ async function poll(){
     }
     const ns = st.notion || {};
     if(!st.claude_ok){
-      showBanner('Claude Code CLI를 찾을 수 없어요 — 실시간 받아쓰기는 되지만, 안건 자동 정리·회의록 자동 생성은 안 됩니다. 쓰려면 설치·로그인 후 서버를 다시 실행하세요.');
+      showBanner('AI CLI를 찾을 수 없어요 — 실시간 받아쓰기는 되지만, 안건 자동 정리·회의록 자동 생성은 안 됩니다. 서버.py 상단의 AI_PROVIDER에 맞는 CLI를 설치·로그인한 뒤 서버를 다시 실행하세요.');
     }else if(st.audio && !st.audio.ok && st.audio.error){
       showBanner('🎤 마이크를 열지 못했습니다: ' + st.audio.error + ' — 자동으로 재시도 중입니다.');
     }else if(mn.status === 'running'){

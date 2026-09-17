@@ -759,7 +759,7 @@ async function poll(){
     document.getElementById('cAsk').textContent = st.counters.ask||0;
     document.getElementById('cWarn').textContent = st.counters.warn||0;
 
-    if(!st.claude_ok){ showBanner('Claude Code CLI를 찾을 수 없어요 — 실시간 받아쓰기는 되지만, 실시간 판정·맞춤 질문 생성·면접 요약은 안 됩니다. 쓰려면 설치·로그인 후 서버를 다시 실행하세요.'); }
+    if(!st.claude_ok){ showBanner('AI CLI를 찾을 수 없어요 — 실시간 받아쓰기는 되지만, 실시간 판정·맞춤 질문 생성·면접 요약은 안 됩니다. 서버.py 상단의 AI_PROVIDER에 맞는 CLI를 설치·로그인한 뒤 서버를 다시 실행하세요.'); }
 
     // 스캔 이력서 자동 변환 진행 상황
     const cv = st.convert || {};
