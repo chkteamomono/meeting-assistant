@@ -1174,9 +1174,49 @@ def save_minutes(out_dir: Path, stem: str, display_title: str, when_label: str, 
         print(f"[회의록] 실패: {e}")
 
 # =============================================================
+# 탭을 닫으면 자동 종료
+#
+# 화면(index.html)은 1초마다 /api/state를 폴링한다 — 역으로, 한동안 어떤
+# 요청도 안 들어오면 "탭이 다 닫혔다"고 볼 수 있다. 탭을 닫는 즉시 끄면 실수로
+# 닫았을 때·새로고침할 때 위험하니 여유 시간을 두고, 회의 중이거나 회의록·노션
+# 작성이 진행 중이면 그것부터 끝날 때까지 기다린다.
+# =============================================================
+SHUTDOWN_IDLE_GRACE = 20  # 초 — 이만큼 요청이 없으면 탭이 닫힌 것으로 봄
+last_activity_at = time.time()
+
+
+def shutdown_watchdog_loop():
+    global last_activity_at
+    while not shutdown.is_set():
+        time.sleep(5)
+        idle_for = time.time() - last_activity_at
+        if idle_for < SHUTDOWN_IDLE_GRACE:
+            continue
+        busy = (
+            running.is_set()
+            or minutes_state.get("status") == "running"
+            or notion_status.get("status") == "running"
+            or correction_status.get("status") == "running"
+        )
+        if busy:
+            continue  # 작업이 남아있으면 기다린다 — idle_for는 다음 루프에서 다시 확인
+        print(f"[자동종료] {idle_for:.0f}초간 접속이 없어 서버를 종료합니다")
+        try:
+            PID_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
+        os._exit(0)
+
+# =============================================================
 # Flask 웹 서버
 # =============================================================
 app = Flask(__name__)
+
+
+@app.before_request
+def _mark_activity():
+    global last_activity_at
+    last_activity_at = time.time()
 
 
 @app.route("/")
@@ -1578,6 +1618,7 @@ def main():
     threading.Thread(target=stt_loop, daemon=True).start()
     threading.Thread(target=correction_loop, daemon=True).start()
     threading.Thread(target=board_loop, daemon=True).start()
+    threading.Thread(target=shutdown_watchdog_loop, daemon=True).start()
 
     if not os.environ.get("QP_NO_BROWSER"):
         threading.Timer(1.5, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
