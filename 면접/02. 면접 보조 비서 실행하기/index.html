@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>면접 보조 비서</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:#2c3e50; --green:#27ae60; --red:#e74c3c; --amber:#f39c12;
+    --ink:#34495e; --muted:#95a5a6; --line:#e5e9ec; --bg:#f4f6f8;
+  }
+  body {
+    font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; padding:24px 16px 40px;
+  }
+  header { width:100%; max-width:760px; display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  header .logo { font-size:26px; }
+  header h1 { font-size:20px; color:var(--navy); }
+  header .sub { font-size:12px; color:var(--muted); margin-left:2px; }
+  header .settings-link {
+    margin-left:auto; text-decoration:none; color:var(--navy);
+    display:flex; align-items:center; gap:6px;
+    padding:9px 16px; border-radius:10px; background:#fff; border:1px solid var(--line);
+    font-size:13px; font-weight:700; box-shadow:0 1px 3px rgba(44,62,80,.06);
+  }
+  header .settings-link:hover { border-color:var(--navy); background:#f7f9fa; }
+
+  .panel {
+    width:100%; max-width:760px; background:#fff; border-radius:16px;
+    box-shadow:0 4px 20px rgba(44,62,80,.08); padding:22px; margin-bottom:18px;
+  }
+
+  .control { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+  .status { display:flex; align-items:center; gap:10px; }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--muted); }
+  .dot.on { background:var(--green); box-shadow:0 0 0 4px rgba(39,174,96,.15); }
+  .status .txt { font-size:15px; font-weight:700; }
+  .timer { font-family:Consolas,monospace; font-size:30px; font-weight:700; color:var(--navy); letter-spacing:1px; }
+
+  button.main {
+    border:0; border-radius:12px; padding:14px 26px; font-size:16px; font-weight:800;
+    color:#fff; cursor:pointer; background:var(--green); transition:.15s; min-width:150px;
+  }
+  button.sub {
+    border:1px solid var(--line); background:#fff; border-radius:11px; padding:12px 16px;
+    font-family:inherit; font-size:14px; font-weight:700; color:var(--navy); cursor:pointer; transition:.15s;
+  }
+  button.sub:hover { border-color:var(--navy); background:#f7f9fa; }
+
+  /* Notion 복사 */
+  .ncopy { padding:14px 20px 20px; }
+  .ncopy .lbl { font-size:12px; font-weight:800; color:var(--navy); margin:12px 0 6px; }
+  .ncopy .lbl:first-child { margin-top:0; }
+  .ncopy .row { display:flex; gap:8px; align-items:stretch; }
+  .ncopy input, .ncopy textarea {
+    flex:1; font-family:inherit; font-size:13px; line-height:1.6; color:var(--ink);
+    border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:#fbfcfd; resize:vertical;
+  }
+  .ncopy textarea { min-height:260px; font-family:Consolas,monospace; font-size:12.5px; white-space:pre; }
+  .ncopy button {
+    border:0; border-radius:9px; padding:0 16px; background:var(--navy); color:#fff;
+    font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .ncopy .guide { font-size:12px; color:var(--muted); line-height:1.7;
+                  background:#f7f9fa; border-radius:9px; padding:11px 13px; margin-bottom:4px; }
+  .ncopy .guide b { color:var(--navy); }
+
+  button.main.stop { background:var(--red); }
+  button.main.pause { background:var(--amber); min-width:120px; }
+  button.main.resume { background:var(--green); min-width:120px; }
+  button.main:active { transform:translateY(1px); }
+  button.main:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* 지원자 선택 줄 */
+  .candbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+             padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--line); }
+  .candbar label { font-size:13px; font-weight:700; color:var(--navy); }
+  .candbar select {
+    flex:1; min-width:220px; font-family:inherit; font-size:14px; padding:9px 11px;
+    border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); cursor:pointer;
+  }
+  .candbar select:disabled { background:#f7f9fa; color:var(--muted); cursor:not-allowed; }
+  .candbar .rs { font-size:12px; color:var(--muted); width:100%; }
+  .candbar .rs b { color:var(--green); }
+  .candbar .rs.none b { color:var(--amber); }
+
+  .counters { display:flex; gap:12px; margin-top:20px; }
+  .card { flex:1; border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center;
+          background:#fff; font-family:inherit; cursor:pointer; transition:.15s; }
+  .card:hover { border-color:var(--navy); box-shadow:0 3px 12px rgba(44,62,80,.10); transform:translateY(-1px); }
+  .card .n { font-size:28px; font-weight:800; }
+  .card .l { font-size:12px; color:var(--muted); margin-top:2px; }
+  .card .more { font-size:11px; color:var(--muted); margin-top:6px; opacity:.75; }
+  .card.ok .n { color:var(--green); }
+  .card.ask .n { color:var(--amber); }
+  .card.warn .n { color:var(--red); }
+
+  /* 지난 알림 다시보기 */
+  #modal, #nmodal { position:fixed; inset:0; background:rgba(44,62,80,.45); z-index:80;
+           display:none; align-items:center; justify-content:center; padding:20px; }
+  #modal.on, #nmodal.on { display:flex; }
+  .sheet { width:100%; max-width:680px; max-height:82vh; background:#fff; border-radius:16px;
+           display:flex; flex-direction:column; box-shadow:0 18px 50px rgba(44,62,80,.35); }
+  .sheet .head { display:flex; align-items:center; justify-content:space-between;
+                 padding:16px 20px; border-bottom:1px solid var(--line); }
+  .sheet .head h2 { font-size:16px; color:var(--navy); }
+  .sheet .head .x { cursor:pointer; font-size:18px; color:var(--muted); padding:2px 6px; border:0; background:none; }
+  .tabs { display:flex; gap:6px; padding:12px 20px 0; }
+  .tabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 14px;
+                 font-family:inherit; font-size:13px; color:var(--ink); cursor:pointer; }
+  .tabs button.on { background:var(--navy); border-color:var(--navy); color:#fff; font-weight:700; }
+  #histList { overflow-y:auto; padding:14px 20px 20px; }
+  .hi { border:1px solid var(--line); border-left-width:4px; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .hi.ask { border-left-color:var(--amber); }
+  .hi.warn { border-left-color:var(--red); }
+  .hi.ok  { border-left-color:var(--green); }
+  .hi .meta { font-size:11px; color:var(--muted); margin-bottom:5px; }
+  .hi .s { font-size:14px; font-weight:700; color:var(--navy); margin-bottom:5px; }
+  .hi .q { font-size:14px; line-height:1.55; color:var(--ink); }
+  .hi .w { font-size:14px; line-height:1.55; color:#c0392b; font-weight:700; }
+  .hi .src { font-size:12px; color:var(--muted); margin-top:7px; padding-top:7px;
+             border-top:1px dashed var(--line); line-height:1.5; }
+  #histList .empty { color:var(--muted); font-size:13px; text-align:center; padding:30px 0; }
+
+  /* 면접 종료 시 평가 입력 */
+  #evalModal { position:fixed; inset:0; background:rgba(44,62,80,.45); z-index:90;
+               display:none; align-items:center; justify-content:center; padding:20px; }
+  #evalModal.on { display:flex; }
+  .eval-body { overflow-y:auto; padding:16px 20px 20px; }
+  .eval-label { font-size:12px; font-weight:800; color:var(--navy); margin:14px 0 8px; }
+  .eval-label:first-child { margin-top:0; }
+  .score-row { display:flex; gap:10px; align-items:flex-start; padding:9px 10px; border-radius:9px;
+               border:1px solid var(--line); margin-bottom:6px; cursor:pointer; transition:.12s; }
+  .score-row:hover { border-color:var(--navy); background:#f7f9fa; }
+  .score-row.picked { border-color:var(--green); background:#eafaf1; }
+  .score-row .n { flex:none; width:22px; height:22px; border-radius:50%; background:var(--line);
+                  color:var(--navy); font-weight:800; font-size:12px; display:flex; align-items:center;
+                  justify-content:center; }
+  .score-row.picked .n { background:var(--green); color:#fff; }
+  .score-row .d { font-size:13px; line-height:1.5; color:var(--ink); padding-top:1px; }
+  #evalComment { width:100%; min-height:90px; font-family:inherit; font-size:13.5px; line-height:1.6;
+                 color:var(--ink); border:1px solid var(--line); border-radius:9px; padding:10px 12px;
+                 resize:vertical; }
+  .eval-actions { display:flex; justify-content:space-between; align-items:center; gap:10px;
+                  padding:14px 20px; border-top:1px solid var(--line); }
+  .eval-actions .skip { border:0; background:none; color:var(--muted); font-size:13px; cursor:pointer;
+                         text-decoration:underline; }
+  .eval-actions .save { border:0; border-radius:11px; padding:12px 22px; background:var(--red);
+                         color:#fff; font-family:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+
+  /* 상단 탭 (받아쓰기 / 면접 질문) */
+  .maintabs { width:100%; max-width:760px; display:flex; gap:8px; margin-bottom:12px; }
+  .maintabs button {
+    flex:1; border:1px solid var(--line); background:#fff; border-radius:11px; padding:11px 10px;
+    font-family:inherit; font-size:14px; font-weight:700; color:var(--muted); cursor:pointer; transition:.15s;
+  }
+  .maintabs button.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+  .maintabs button .badge {
+    display:inline-block; min-width:19px; padding:0 5px; margin-left:6px; border-radius:999px;
+    background:var(--amber); color:#fff; font-size:11px; line-height:19px;
+  }
+  .maintabs button.on .badge { background:#fff; color:var(--navy); }
+  .pane { display:none; }
+  .pane.on { display:block; }
+
+  /* 면접 질문 탭 */
+  .qsec { margin-bottom:20px; }
+  .qsec > h4 { font-size:13px; font-weight:800; color:var(--navy); margin-bottom:9px;
+               padding-bottom:6px; border-bottom:2px solid var(--line); }
+  .qi { display:flex; gap:10px; padding:9px 2px; border-bottom:1px dashed var(--line); }
+  .qi:last-child { border-bottom:0; }
+  .qi input { margin-top:3px; width:16px; height:16px; flex:none; cursor:pointer; accent-color:var(--green); }
+  .qi .body { flex:1; }
+  .qi .q { font-size:14px; line-height:1.55; color:var(--ink); cursor:pointer; }
+  .qi.done .q { color:var(--muted); text-decoration:line-through; }
+  .qi .note { font-size:12px; color:var(--muted); line-height:1.5; margin-top:3px; padding-left:9px;
+              border-left:2px solid var(--line); }
+  .qi .why { font-size:12px; color:var(--amber); margin-top:3px; font-weight:700; }
+  .qhint { font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:14px;
+           background:#f7f9fa; border-radius:9px; padding:10px 12px; }
+  .qstate { font-size:13px; color:var(--muted); padding:14px 0; }
+  .qsec.live > h4 { border-bottom-color:var(--amber); }
+  .qsec.custom > h4 { border-bottom-color:var(--green); }
+
+  .caption-box { min-height:64px; }
+  .caption-box h3 { font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:700; }
+  #captions { font-size:14px; line-height:1.7; color:var(--ink); max-height:140px; overflow-y:auto; }
+  #captions .line { padding:2px 0; border-bottom:1px dashed var(--line); }
+  #captions .empty { color:var(--muted); }
+
+  .hint { width:100%; max-width:760px; font-size:12px; color:var(--muted); line-height:1.7; }
+  .banner { width:100%; max-width:760px; background:#fdecea; color:#c0392b; border:1px solid #f5c6c0;
+            border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; display:none; }
+
+  /* 알림 */
+  #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:10px; z-index:50; }
+  .toast {
+    width:360px; background:var(--amber); color:#fff; border-radius:12px; padding:14px 16px;
+    box-shadow:0 6px 24px rgba(243,156,18,.35); animation:pop .2s ease-out;
+  }
+  .toast .t { font-weight:800; font-size:14px; margin-bottom:6px; }
+  .toast .q { font-size:14px; line-height:1.5; }
+
+  #popups { position:fixed; right:20px; top:20px; display:flex; flex-direction:column; gap:12px; z-index:60; }
+  .popup {
+    width:400px; background:#fff; border-radius:14px; overflow:hidden;
+    box-shadow:0 10px 34px rgba(231,76,60,.35); border:2px solid var(--red); animation:pop .2s ease-out;
+  }
+  .popup .head { background:var(--red); color:#fff; padding:12px 14px; font-weight:800; font-size:15px;
+                 display:flex; justify-content:space-between; align-items:center; }
+  .popup .head .x { cursor:pointer; font-size:16px; padding:0 4px; }
+  .popup .body { padding:14px 16px; }
+  .popup .body .lbl { font-size:11px; color:var(--muted); margin-bottom:2px; }
+  .popup .body .det { font-size:13px; color:var(--ink); margin-bottom:10px; }
+  .popup .body .warn { font-size:14px; color:#c0392b; font-weight:700; line-height:1.5; }
+  @keyframes pop { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">🔍</span>
+    <div>
+      <h1>면접 보조 비서 <span class="sub">물어볼 것을 짚어주고, 물으면 안 될 것을 막아줍니다</span></h1>
+    </div>
+    <a class="settings-link" href="http://127.0.0.1:7999" title="런처 — 오늘은 어떤 작업을 할까요">🏠 처음으로</a>
+    <a class="settings-link" href="/settings" title="설정 — 프로그램 종료">⚙️ 설정</a>
+  </header>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="panel">
+    <div class="candbar">
+      <label for="cand">👤 오늘 면접</label>
+      <select id="cand"><option value="">불러오는 중…</option></select>
+      <div id="resumeInfo" class="rs">지원자를 고르면 이력서를 읽어 면접 중 답변과 대조합니다.</div>
+    </div>
+
+    <div class="control">
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusTxt" class="txt">대기 중</span>
+      </div>
+      <div id="timer" class="timer">00:00:00</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="notionBtn" class="sub" onclick="openNotion()" style="display:none">📋 Notion용 정리</button>
+        <button id="pauseBtn" class="main pause" onclick="togglePause()" style="display:none">⏸ 일시정지</button>
+        <button id="btn" class="main" onclick="toggle()">▶ 면접 시작</button>
+      </div>
+    </div>
+
+    <div class="counters">
+      <button class="card ok"   onclick="openHist('ok')"><div class="n" id="cOk">0</div><div class="l">✅ 점검 통과</div><div class="more">눌러서 보기</div></button>
+      <button class="card ask"  onclick="openHist('ask')"><div class="n" id="cAsk">0</div><div class="l">🟡 추가 질문</div><div class="more">눌러서 보기</div></button>
+      <button class="card warn" onclick="openHist('warn')"><div class="n" id="cWarn">0</div><div class="l">🔴 차별 경고</div><div class="more">눌러서 보기</div></button>
+    </div>
+  </div>
+
+  <div class="maintabs">
+    <button id="mtCap" class="on" onclick="showPane('cap')">🎤 실시간 받아쓰기</button>
+    <button id="mtQ" onclick="showPane('q')">📋 면접 질문<span id="qBadge" class="badge" style="display:none">0</span></button>
+  </div>
+
+  <div id="paneCap" class="pane on panel caption-box">
+    <h3>🎤 실시간 받아쓰기</h3>
+    <div id="captions"><div class="empty">면접을 시작하면 들리는 내용이 여기에 표시됩니다.</div></div>
+  </div>
+
+  <div id="paneQ" class="pane panel">
+    <div class="qhint">
+      질문을 누르면 <b>물어본 것으로 표시</b>됩니다. (지원자별로 기억되고, 새로고침해도 남습니다)<br>
+      공통 질문은 <b>참고자료/면접질문.txt</b>를 고치면 바뀝니다.
+    </div>
+    <div id="qBody"><div class="qstate">불러오는 중…</div></div>
+  </div>
+
+  <div class="hint">
+    · 이 창은 같은 PC에서만 접속됩니다(localhost). 음성은 PC 밖으로 나가지 않습니다.<br>
+    · 🟡 추가 질문 제안은 우측 아래, 🔴 차별 질문 경고는 우측 위에 뜹니다.<br>
+    · 알림을 닫았어도 <b>위 카운터를 누르면 지난 알림을 다시 볼 수 있습니다.</b><br>
+    · 면접 종료를 누르면 <b>고른 지원자 폴더</b>에 대화록과 공유용 요약이 자동 저장됩니다.
+  </div>
+
+  <div id="toasts"></div>
+  <div id="popups"></div>
+
+  <div id="evalModal" onclick="if(event.target===this) closeEvalModal()">
+    <div class="sheet">
+      <div class="head">
+        <h2 id="evalTitle">면접 종료 — 평가를 남겨주세요</h2>
+        <button class="x" onclick="closeEvalModal()">✕</button>
+      </div>
+      <div class="eval-body">
+        <div class="eval-label">점수 (1~10, 선택)</div>
+        <div id="scoreList"></div>
+        <div class="eval-label">주관적 평가</div>
+        <textarea id="evalComment" placeholder="느낀 점, 강점·우려사항, 판단 근거 등을 자유롭게 적어주세요"></textarea>
+      </div>
+      <div class="eval-actions">
+        <button class="skip" onclick="finishStop(false)">평가 없이 바로 종료</button>
+        <button class="save" onclick="finishStop(true)">저장하고 종료</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="nmodal" onclick="if(event.target===this) closeNotion()">
+    <div class="sheet">
+      <div class="head">
+        <h2>📋 Notion에 붙여넣기</h2>
+        <button class="x" onclick="closeNotion()">✕</button>
+      </div>
+      <div class="ncopy">
+        <div class="guide">
+          Notion 페이지 맨 아래에서 <b>&gt;</b> 를 치고 <b>스페이스</b>를 누르면 토글이 만들어집니다.<br>
+          ① 토글 제목에 아래 <b>제목</b>을 붙여넣고 → ② 토글을 펼쳐 그 안에 <b>본문</b>을 붙여넣으세요.<br>
+          본문은 Notion이 제목·불릿으로 알아서 바꿔줍니다.
+        </div>
+        <div class="lbl">① 토글 제목</div>
+        <div class="row">
+          <input id="nTitle" readonly>
+          <button onclick="copyNotion('nTitle', this)">복사</button>
+        </div>
+        <div class="lbl">② 토글 안에 넣을 본문</div>
+        <div class="row">
+          <textarea id="nBody" readonly></textarea>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="copyNotion('nBody', this)" style="padding:11px 16px">본문 전체 복사</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal" onclick="if(event.target===this) closeHist()">
+    <div class="sheet">
+      <div class="head">
+        <h2 id="histTitle">지난 알림 다시보기</h2>
+        <button class="x" onclick="closeHist()">✕</button>
+      </div>
+      <div class="tabs">
+        <button id="tabAll"  onclick="setTab('all')">전체</button>
+        <button id="tabAsk"  onclick="setTab('ask')">🟡 추가 질문</button>
+        <button id="tabWarn" onclick="setTab('warn')">🔴 차별 경고</button>
+        <button id="tabOk"   onclick="setTab('ok')">✅ 통과</button>
+      </div>
+      <div id="histList"></div>
+    </div>
+  </div>
+
+<script>
+let running = false;
+let capEmpty = true;
+let convertWasRunning = false;
+let prepWasRunning = false;
+let reportWasRunning = false;
+let histItems = [];
+let histTab = 'all';
+
+function fmt(sec){
+  const h=String(Math.floor(sec/3600)).padStart(2,'0');
+  const m=String(Math.floor(sec%3600/60)).padStart(2,'0');
+  const s=String(sec%60).padStart(2,'0');
+  return `${h}:${m}:${s}`;
+}
+
+/* ── 지원자 목록 ─────────────────────────────── */
+async function loadCandidates(){
+  const sel = document.getElementById('cand');
+  const info = document.getElementById('resumeInfo');
+  try{
+    const r = await (await fetch('/api/candidates')).json();
+    const saved = localStorage.getItem('qp_cand') || '';
+    const list = r.candidates || [];
+
+    sel.innerHTML = '<option value="">(지원자 미지정 — 면접로그 폴더에 저장)</option>';
+    list.forEach(c=>{
+      const o = document.createElement('option');
+      o.value = c.rel;
+      let mark = c.has_resume ? ' 📄' : ' (이력서 파일 없음)';
+      if(c.has_questions) mark += ' ✅질문 준비됨';
+      o.textContent = c.name + mark;
+      sel.appendChild(o);
+    });
+    if(saved && list.some(c=>c.rel===saved)) sel.value = saved;
+
+    if(!list.length){
+      info.className = 'rs none';
+      info.innerHTML = r.stage
+        ? `<b>면접로그/${escapeHtml(r.stage)}/</b> 폴더가 비어 있어요. 오늘 면접볼 사람의 <b>이름 폴더</b>를 그 안에 옮겨두면 여기에 나타납니다.`
+        : `<b>02. 면접 대상</b> 폴더를 찾지 못했어요. 면접로그 안에 만들어 주세요.`;
+    }else{
+      info.className = 'rs';
+      info.innerHTML = `<b>면접로그/${escapeHtml(r.stage)}/</b> 에서 ${list.length}명을 불러왔습니다. 📄 표시는 이력서 파일이 있는 사람입니다.`;
+    }
+    if(!r.pdf_ok){
+      showBanner('PDF 이력서를 읽으려면 「1_설치하기.bat」을 한 번 더 실행해 주세요. (pypdf 미설치 — 이력서 없이도 면접 점검은 됩니다)');
+    }
+  }catch(e){
+    sel.innerHTML = '<option value="">(목록을 불러오지 못했어요)</option>';
+  }
+}
+
+async function toggle(){
+  const btn = document.getElementById('btn');
+  const sel = document.getElementById('cand');
+  if(!running){
+    btn.disabled = true;
+    try{
+      localStorage.setItem('qp_cand', sel.value||'');
+      const r = await (await fetch('/api/start',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({candidate: sel.value||''})
+      })).json();
+      if(!r.ok){ showBanner(r.error || '시작 실패'); }
+    }catch(e){ showBanner('서버와 통신 실패: '+e); }
+    btn.disabled = false;
+  }else{
+    openEvalModal();   // 바로 종료하지 않고, 먼저 점수·평가를 남길 기회를 준다
+  }
+}
+
+/* ── 면접 종료 시 평가(점수·주관 평가) ─────────── */
+const SCORE_LABELS = {
+  10: "매우 만족하며 바로 채용의사 있음, 대부분의 조건 반영 가능",
+  9: "약간 만족하며 채용의사 있음, 약간의 원하는 조건 반영 가능",
+  8: "이정도면 괜찮을 것 같고, 제시한 조건이 있다면 고민해보겠음",
+  7: "그럭저럭 괜찮은 것 같음, 특별한 이슈가 없다면 채용 안정권",
+  6: "뽑기에는 애매하고 그렇다고 탈락이라고 하기엔 아쉬움",
+  5: "인력이 급하다면 채용할 생각 있음",
+  4: "당장 사람 안 뽑아주면 나간다고 하는 상황 아니면 안 뽑음",
+  3: "인성or능력 중 하나가 많이 부족하여 뽑으면 문제가 생김",
+  2: "인성or능력 모두 부족함",
+  1: "채용불가, 두 번 다시 보고 싶지 않음",
+};
+let selectedScore = null;
+
+function renderScoreList(){
+  const box = document.getElementById('scoreList');
+  box.innerHTML = Object.keys(SCORE_LABELS).map(n=>{
+    return `<div class="score-row" onclick="pickScore(${n}, this)">
+              <span class="n">${n}</span>
+              <span class="d">${escapeHtml(SCORE_LABELS[n])}</span>
+            </div>`;
+  }).join('');
+}
+
+function pickScore(n, el){
+  selectedScore = (selectedScore === n) ? null : n;   // 같은 걸 다시 누르면 선택 해제
+  document.querySelectorAll('#scoreList .score-row').forEach(r=>r.classList.remove('picked'));
+  if(selectedScore !== null) el.classList.add('picked');
+}
+
+function openEvalModal(){
+  selectedScore = null;
+  renderScoreList();
+  document.getElementById('evalComment').value = '';
+  const who = document.getElementById('cand').selectedOptions[0]?.textContent || '';
+  document.getElementById('evalTitle').textContent = who ? `면접 종료 — ${who} 평가` : '면접 종료 — 평가를 남겨주세요';
+  document.getElementById('evalModal').classList.add('on');
+}
+
+function closeEvalModal(){
+  document.getElementById('evalModal').classList.remove('on');
+}
+
+async function finishStop(withEval){
+  const btn = document.getElementById('btn');
+  closeEvalModal();
+  btn.disabled = true;
+  try{
+    const body = withEval ? {score: selectedScore, comment: document.getElementById('evalComment').value} : {};
+    const r = await (await fetch('/api/stop',{
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    })).json();
+    if(r.summary_file){ showBanner('면접 요약을 저장했어요 → 면접로그/'+r.summary_file, true); }
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+  btn.disabled = false;
+}
+
+let paused = false;
+async function togglePause(){
+  const btn = document.getElementById('pauseBtn');
+  btn.disabled = true;
+  try{
+    const url = paused ? '/api/resume' : '/api/pause';
+    const r = await (await fetch(url, {method:'POST'})).json();
+    paused = !!r.paused;
+  }catch(e){ showBanner('서버와 통신 실패: '+e); }
+  btn.disabled = false;
+}
+
+/* ── 지난 알림 다시보기 ───────────────────────── */
+async function openHist(tab){
+  histTab = tab || 'all';
+  document.getElementById('modal').classList.add('on');
+  try{
+    const r = await (await fetch('/api/history')).json();
+    histItems = r.items || [];
+    document.getElementById('histTitle').textContent =
+      (r.candidate ? r.candidate + ' — ' : '') + '지난 알림 다시보기';
+  }catch(e){ histItems = []; }
+  setTab(histTab);
+}
+
+function closeHist(){ document.getElementById('modal').classList.remove('on'); }
+
+function setTab(tab){
+  histTab = tab;
+  ['all','ask','warn','ok'].forEach(t=>{
+    const b = document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(b) b.classList.toggle('on', t===tab);
+  });
+  renderHist();
+}
+
+function renderHist(){
+  const box = document.getElementById('histList');
+  // skip(잡담·인식오류)은 보여줄 게 없어 항상 제외
+  let items = histItems.filter(v => ['ask','warn','ok'].includes(v.status));
+  if(histTab !== 'all') items = items.filter(v => v.status === histTab);
+
+  if(!items.length){
+    box.innerHTML = '<div class="empty">아직 기록된 알림이 없습니다.</div>';
+    return;
+  }
+  box.innerHTML = items.slice().reverse().map(v=>{
+    const t = (v.timestamp||'').slice(11,16);
+    const icon = v.status==='warn' ? '🔴' : (v.status==='ask' ? '🟡' : '✅');
+    let body = '';
+    if(v.status==='warn') body = `<div class="w">${escapeHtml(v.warning||'')}</div>`;
+    else if(v.status==='ask') body = `<div class="q">→ ${escapeHtml(v.suggested_question||'')}</div>`;
+    const src = v.raw_input ? `<div class="src">들린 말: ${escapeHtml(v.raw_input)}</div>` : '';
+    return `<div class="hi ${v.status}">
+              <div class="meta">${icon} ${t} · ${escapeHtml(v.category||'')}</div>
+              <div class="s">${escapeHtml(v.summary||'')}</div>
+              ${body}${src}
+            </div>`;
+  }).join('');
+}
+
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeHist(); closeNotion(); closeEvalModal(); } });
+
+/* ── Notion 붙여넣기용 정리 ───────────────────── */
+async function openNotion(){
+  try{
+    const r = await (await fetch('/api/notion')).json();
+    if(!r.ok){ showBanner(r.error || '정리할 내용이 없습니다.'); return; }
+    document.getElementById('nTitle').value = r.title;
+    document.getElementById('nBody').value = r.body;
+    document.getElementById('nmodal').classList.add('on');
+  }catch(e){ showBanner('불러오지 못했어요: '+e); }
+}
+
+function closeNotion(){ document.getElementById('nmodal').classList.remove('on'); }
+
+async function copyNotion(id, btn){
+  const el = document.getElementById(id);
+  const old = btn.textContent;
+  try{
+    await navigator.clipboard.writeText(el.value);
+  }catch(e){
+    el.removeAttribute('readonly'); el.select(); document.execCommand('copy');
+    el.setAttribute('readonly',''); // http://127.0.0.1 이 아닌 환경 대비
+  }
+  btn.textContent = '복사됨 ✓';
+  setTimeout(()=>{ btn.textContent = old; }, 1500);
+}
+
+/* ── 면접 질문 탭 ─────────────────────────────── */
+let pane = 'cap';
+let liveCount = 0, liveSeen = 0;
+let qWho = '';
+let qRenderedAsk = -1, qGenerating = false, qLastFetch = 0;
+
+function showPane(p){
+  pane = p;
+  document.getElementById('paneCap').classList.toggle('on', p==='cap');
+  document.getElementById('paneQ').classList.toggle('on', p==='q');
+  document.getElementById('mtCap').classList.toggle('on', p==='cap');
+  document.getElementById('mtQ').classList.toggle('on', p==='q');
+  if(p==='q'){ liveSeen = liveCount; updateBadge(); loadQuestions(); }
+}
+
+function updateBadge(){
+  const b = document.getElementById('qBadge');
+  const n = Math.max(0, liveCount - liveSeen);
+  if(n > 0 && pane !== 'q'){ b.style.display='inline-block'; b.textContent = n; }
+  else { b.style.display='none'; }
+}
+
+/* 물어본 질문 체크 상태 — 지원자별로 localStorage에 보관 */
+function askedKey(){ return 'qp_asked_' + (qWho || (document.getElementById('cand').value || 'none')); }
+function getAsked(){ try{ return new Set(JSON.parse(localStorage.getItem(askedKey()) || '[]')); }catch(e){ return new Set(); } }
+function toggleAsked(id, el){
+  const s = getAsked();
+  if(s.has(id)) s.delete(id); else s.add(id);
+  localStorage.setItem(askedKey(), JSON.stringify([...s]));
+  el.classList.toggle('done', s.has(id));
+  el.querySelector('input').checked = s.has(id);
+}
+
+function qItem(id, text, notes, why){
+  const asked = getAsked().has(id);
+  const noteHtml = (notes||[]).map(n=>`<div class="note">${escapeHtml(n)}</div>`).join('');
+  const whyHtml = why ? `<div class="why">↳ ${escapeHtml(why)}</div>` : '';
+  return `<div class="qi ${asked?'done':''}" onclick="toggleAsked('${id}', this)">
+            <input type="checkbox" ${asked?'checked':''} onclick="event.stopPropagation(); toggleAsked('${id}', this.closest('.qi'))">
+            <div class="body"><div class="q">${escapeHtml(text)}</div>${whyHtml}${noteHtml}</div>
+          </div>`;
+}
+
+async function loadQuestions(){
+  const box = document.getElementById('qBody');
+  let r;
+  qLastFetch = Date.now();
+  try{ r = await (await fetch('/api/questions')).json(); }
+  catch(e){ box.innerHTML = '<div class="qstate">질문을 불러오지 못했어요.</div>'; return; }
+  qWho = r.candidate || '';
+  qGenerating = (r.custom || {}).status === 'generating';
+  qRenderedAsk = liveCount;
+  let html = '';
+
+  // 1) 이력서 맞춤 질문 — 이 지원자에게만 해당
+  const c = r.custom || {};
+  html += `<div class="qsec custom"><h4>🎯 이 지원자 맞춤 질문${qWho ? ' — ' + escapeHtml(qWho) : ''}</h4>`;
+  if(c.status === 'ready' && (c.items||[]).length){
+    html += c.items.map((it,i)=> qItem('cu'+i, it.q, [], it.why)).join('');
+  }else if(c.status === 'generating'){
+    html += '<div class="qstate">이력서를 읽고 맞춤 질문을 만드는 중입니다… (10~30초)</div>';
+  }else if(c.status === 'none'){
+    html += '<div class="qstate">이력서가 없어 맞춤 질문은 만들지 못했습니다. 아래 공통 질문으로 진행하세요.</div>';
+  }else if(c.status === 'error'){
+    html += `<div class="qstate">${escapeHtml(c.error||'만들지 못했습니다.')}</div>`;
+  }else{
+    html += '<div class="qstate">면접을 시작하면 이력서를 읽고 맞춤 질문을 만듭니다.</div>';
+  }
+  html += '</div>';
+
+  // 2) 면접 중 나온 실시간 추가 질문
+  const live = r.live || [];
+  html += `<div class="qsec live"><h4>🟡 면접 중 추가된 질문 (${live.length})</h4>`;
+  html += live.length
+    ? live.map((it,i)=> qItem('lv'+i, it.q, [], `${it.time} · ${it.why}`)).join('')
+    : '<div class="qstate">면접이 진행되면 더 물어볼 질문이 여기에 쌓입니다.</div>';
+  html += '</div>';
+
+  // 3) 공통 질문
+  (r.common||[]).forEach((sec, si)=>{
+    html += `<div class="qsec"><h4>${escapeHtml(sec.title)}</h4>`;
+    html += sec.items.map((it,i)=> qItem(`c${si}_${i}`, it.q, it.notes, '')).join('');
+    html += '</div>';
+  });
+
+  box.innerHTML = html || '<div class="qstate">질문이 없습니다.</div>';
+}
+
+function showBanner(msg, ok){
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.style.display = 'block';
+  b.style.background = ok ? '#eafaf1' : '#fdecea';
+  b.style.color = ok ? '#1e8449' : '#c0392b';
+  b.style.borderColor = ok ? '#abebc6' : '#f5c6c0';
+  if(ok){ setTimeout(()=>{ b.style.display='none'; }, 6000); }
+}
+
+function addToast(v){
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<div class="t">🟡 ${escapeHtml(v.summary||'추가 질문 제안')}</div>
+                  <div class="q">→ ${escapeHtml(v.suggested_question||'')}</div>`;
+  box.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 8000);
+}
+
+function addPopup(v){
+  const box = document.getElementById('popups');
+  const el = document.createElement('div');
+  el.className = 'popup';
+  el.innerHTML = `<div class="head"><span>🔴 이 질문은 하지 마세요</span><span class="x">✕</span></div>
+                  <div class="body">
+                    <div class="lbl">탐지</div><div class="det">${escapeHtml(v.summary||'')}</div>
+                    <div class="lbl">안내</div><div class="warn">${escapeHtml(v.warning||'')}</div>
+                  </div>`;
+  el.querySelector('.x').onclick = ()=> el.remove();
+  box.appendChild(el);
+}
+
+function addCaption(text){
+  const box = document.getElementById('captions');
+  if(capEmpty){ box.innerHTML=''; capEmpty=false; }
+  const line = document.createElement('div');
+  line.className='line';
+  line.textContent = text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  while(box.children.length > 40) box.removeChild(box.firstChild);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function poll(){
+  try{
+    const st = await (await fetch('/api/state')).json();
+    running = st.running;
+
+    // 상태등 / 버튼
+    const dot=document.getElementById('dot'), stx=document.getElementById('statusTxt'), btn=document.getElementById('btn');
+    paused = !!st.paused;
+    const pauseBtn = document.getElementById('pauseBtn');
+    if(running){
+      dot.classList.add('on');
+      if(paused){
+        stx.textContent = (st.candidate ? `${st.candidate} — ` : '') + '일시정지됨';
+        pauseBtn.textContent = '▶ 재개'; pauseBtn.classList.add('resume');
+      }else{
+        stx.textContent = st.candidate ? `${st.candidate} 면접 점검 중` : '점검 중';
+        pauseBtn.textContent = '⏸ 일시정지'; pauseBtn.classList.remove('resume');
+      }
+      pauseBtn.style.display = 'inline-block';
+      btn.textContent='⏹ 면접 종료'; btn.classList.add('stop');
+    }else{
+      dot.classList.remove('on');
+      stx.textContent = st.whisper_ready ? '대기 중' : '준비 중(음성모델 로딩)…';
+      pauseBtn.style.display = 'none';
+      btn.textContent='▶ 면접 시작'; btn.classList.remove('stop');
+    }
+
+    // 면접 중에는 지원자를 바꿀 수 없게 잠그고, 읽어들인 이력서를 보여준다
+    const sel = document.getElementById('cand'), info = document.getElementById('resumeInfo');
+    sel.disabled = running;
+    if(running){
+      const files = st.resume_files || [], bad = st.resume_skipped || [];
+      const warnLine = bad.length
+        ? `<br>⚠️ <b>${bad.map(escapeHtml).join(', ')}</b> 는 글자가 없는 스캔 PDF라 읽지 못했습니다 — 이 내용은 대조되지 않습니다.`
+        : '';
+      if(files.length){
+        info.className = bad.length ? 'rs none' : 'rs';
+        info.innerHTML = `📄 이력서 <b>${files.map(escapeHtml).join(', ')}</b> 를 읽었습니다 — 답변과 대조하며 점검 중입니다.${warnLine}`;
+      }else{
+        info.className = 'rs none';
+        info.innerHTML = (st.candidate
+          ? `<b>${escapeHtml(st.candidate)}</b> 폴더에서 읽을 이력서를 찾지 못했습니다 — 이력서 대조 없이 점검합니다.`
+          : `지원자 미지정 — 요약은 면접로그 폴더에 저장됩니다.`) + warnLine;
+      }
+    }
+
+    // 점검 내용이 쌓이면 Notion 정리 버튼을 띄운다
+    const total = (st.counters.ok||0)+(st.counters.ask||0)+(st.counters.warn||0);
+    document.getElementById('notionBtn').style.display = total > 0 ? 'block' : 'none';
+
+    document.getElementById('timer').textContent = fmt(st.elapsed||0);
+    document.getElementById('cOk').textContent = st.counters.ok||0;
+    document.getElementById('cAsk').textContent = st.counters.ask||0;
+    document.getElementById('cWarn').textContent = st.counters.warn||0;
+
+    if(!st.claude_ok){ showBanner('Claude Code CLI를 찾을 수 없어요 — 실시간 받아쓰기는 되지만, 실시간 판정·맞춤 질문 생성·면접 요약은 안 됩니다. 쓰려면 설치·로그인 후 서버를 다시 실행하세요.'); }
+
+    // 스캔 이력서 자동 변환 진행 상황
+    const cv = st.convert || {};
+    if(cv.status === 'running'){
+      showBanner(`📄 스캔 이력서를 읽는 중입니다 (${cv.done}/${cv.total}) — ${cv.current||''}  ·  면접은 지금 시작하셔도 됩니다`);
+      convertWasRunning = true;
+    }else if(convertWasRunning && cv.status === 'done'){
+      convertWasRunning = false;
+      const n = (cv.converted||[]).length, f = (cv.failed||[]).length;
+      if(n) showBanner(`📄 스캔 이력서 ${n}개를 텍스트로 변환했습니다.` + (f?` (${f}개 실패)`:'') + ' 이제 이력서까지 함께 점검합니다.', true);
+      loadCandidates();   // 📄 표시 갱신
+    }
+
+    // 공유용 면접 요약 생성 상황
+    const rp = st.report || {};
+    if(rp.status === 'running'){
+      showBanner('📝 면접 내용을 질문·답변 요약으로 정리하는 중입니다 (2분 안팎) — 끝나면 [📋 Notion용 정리]에 담깁니다');
+      reportWasRunning = true;
+    }else if(reportWasRunning && rp.status === 'ready'){
+      reportWasRunning = false;
+      showBanner('📝 면접 요약이 완성됐습니다 → ' + (rp.file||'') + '  ·  Notion용 문서도 같은 폴더에 저장됐어요 (면접Notion용_...)', true);
+    }else if(reportWasRunning && rp.status === 'error'){
+      reportWasRunning = false;
+      showBanner('면접 요약을 만들지 못했습니다: ' + (rp.error||''));
+    }
+
+    // 맞춤 질문 미리 만들기 진행 상황
+    const pr = st.prep || {};
+    if(pr.status === 'running'){
+      showBanner(`🎯 지원자 맞춤 질문을 미리 만드는 중입니다 (${pr.done}/${pr.total}) — ${pr.current||''}  ·  1명당 2분쯤 걸리며, 한 번 만들면 다음부터는 즉시 뜹니다`);
+      prepWasRunning = true;
+    }else if(prepWasRunning && pr.status === 'done'){
+      prepWasRunning = false;
+      showBanner(`🎯 맞춤 질문 준비 완료 (${(pr.ready||[]).join(', ')}). 지원자를 고르면 바로 볼 수 있습니다.`, true);
+      loadCandidates();   // ✅ 표시 갱신
+    }
+
+    (st.captions||[]).forEach(addCaption);
+    (st.verdicts||[]).forEach(v=>{
+      if(v.status==='ask') addToast(v);
+      else if(v.status==='warn') addPopup(v);
+    });
+
+    // 면접 질문 탭 — 새 제안이 생기면 배지로 알리고, 탭을 보고 있으면 바로 갱신
+    liveCount = st.counters.ask || 0;
+    updateBadge();
+    if(pane === 'q'){
+      if(liveCount !== qRenderedAsk){ liveSeen = liveCount; loadQuestions(); }
+      else if(qGenerating && Date.now() - qLastFetch > 3000){ loadQuestions(); }
+    }
+  }catch(e){ /* 서버 재시작 중 등 — 조용히 무시 */ }
+}
+loadCandidates();
+setInterval(poll, 1000);
+poll();
+</script>
+</body>
+</html>

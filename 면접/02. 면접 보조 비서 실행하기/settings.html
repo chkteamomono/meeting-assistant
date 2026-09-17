@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>면접 보조 비서 — 설정</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:#2c3e50; --green:#27ae60; --red:#e74c3c; --amber:#f39c12;
+    --ink:#34495e; --muted:#95a5a6; --line:#e5e9ec; --bg:#f4f6f8;
+  }
+  body {
+    font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; padding:24px 16px 40px;
+  }
+  header { width:100%; max-width:640px; display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  header .logo { font-size:26px; }
+  header h1 { font-size:20px; color:var(--navy); }
+  header .back { margin-left:auto; font-size:13px; color:var(--muted); text-decoration:none; }
+  header .back:hover { color:var(--navy); }
+
+  .panel {
+    width:100%; max-width:640px; background:#fff; border-radius:16px;
+    box-shadow:0 4px 20px rgba(44,62,80,.08); padding:22px; margin-bottom:18px;
+  }
+  .panel h2 { font-size:15px; color:var(--navy); margin-bottom:4px; }
+  .panel .desc { font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
+
+  button {
+    border:0; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13.5px;
+    font-weight:700; cursor:pointer; background:var(--navy); color:#fff;
+  }
+
+  .result { font-size:12.5px; line-height:1.6; margin-top:10px; padding:9px 11px; border-radius:8px; display:none; }
+  .result.ok { display:block; background:#eafaf1; color:#1e8449; }
+  .result.err { display:block; background:#fdecea; color:#c0392b; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙️</span>
+    <div><h1>설정</h1></div>
+    <a class="back" href="/">← 면접으로 돌아가기</a>
+  </header>
+
+  <div class="panel">
+    <h2>⏻ 프로그램 종료</h2>
+    <div class="desc">
+      브라우저 탭을 닫으면 자동으로 종료됩니다 — 다만 바로 꺼지는 게 아니라, 면접 중이거나
+      스캔 이력서 변환·맞춤 질문 생성·면접 요약 작성이 진행 중이면 그게 끝날 때까지
+      기다렸다가 조용히 꺼집니다(탭을 닫은 뒤 약 20초~수 분 정도 걸릴 수 있음). 그 전에
+      바로 끄고 싶으면 아래 버튼을 누르세요. (컴퓨터를 끄면 당연히 함께 종료됩니다)
+    </div>
+    <button style="background:var(--red)" onclick="shutdownServer()">서버 종료</button>
+    <div class="result" id="shutdownResult"></div>
+  </div>
+
+<script>
+function showResult(id, ok, msg){
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'result ' + (ok ? 'ok' : 'err');
+}
+
+async function shutdownServer(){
+  if(!confirm('면접 보조 비서를 종료할까요? 진행 중인 면접이 있다면 먼저 종료해두세요.')) return;
+  try{
+    await fetch('/api/shutdown', { method:'POST' });
+    showResult('shutdownResult', true, '종료했습니다. 이 탭은 이제 닫으셔도 됩니다.');
+  }catch(e){
+    // 서버가 죽으면서 연결이 끊기는 게 정상 — 에러로 보이지만 성공한 것
+    showResult('shutdownResult', true, '종료했습니다. 이 탭은 이제 닫으셔도 됩니다.');
+  }
+}
+</script>
+</body>
+</html>

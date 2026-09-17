@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업무 보조 비서</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:#2c3e50; --green:#27ae60; --red:#e74c3c; --amber:#f39c12;
+    --ink:#34495e; --muted:#95a5a6; --line:#e5e9ec; --bg:#f4f6f8;
+  }
+  body {
+    font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px 16px;
+  }
+  h1 { font-size:24px; color:var(--navy); margin-bottom:8px; text-align:center; }
+  .sub { font-size:13.5px; color:var(--muted); margin-bottom:36px; text-align:center; }
+
+  .menu { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; width:100%; max-width:560px; }
+  .card {
+    flex:1; min-width:220px; background:#fff; border:1px solid var(--line); border-radius:18px;
+    padding:32px 24px; text-align:center; cursor:pointer; transition:.15s;
+    box-shadow:0 4px 20px rgba(44,62,80,.06);
+  }
+  .card:hover { border-color:var(--navy); transform:translateY(-2px); box-shadow:0 8px 28px rgba(44,62,80,.12); }
+  .card:disabled, .card.busy { opacity:.6; cursor:wait; transform:none; }
+  .card .emoji { font-size:40px; margin-bottom:14px; }
+  .card .t { font-size:17px; font-weight:800; color:var(--navy); margin-bottom:6px; }
+  .card .d { font-size:12.5px; color:var(--muted); line-height:1.5; }
+
+  .status { margin-top:24px; font-size:13px; color:var(--muted); min-height:20px; text-align:center; }
+  .status.err { color:var(--red); }
+
+  .spinner {
+    display:inline-block; width:14px; height:14px; border:2px solid var(--line);
+    border-top-color:var(--navy); border-radius:50%; animation:spin .8s linear infinite;
+    vertical-align:middle; margin-right:6px;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+  <h1>오늘은 어떤 작업을 할까요?</h1>
+  <div class="sub">원하는 작업을 고르면 필요한 프로그램을 켜고 화면으로 이동합니다</div>
+
+  <div class="menu">
+    <div class="card" id="cardInterview" onclick="launch('interview', '면접')">
+      <div class="emoji">🔍</div>
+      <div class="t">면접진행</div>
+      <div class="d">물어볼 것을 짚어주고, 물으면 안 될 것을 막아줍니다</div>
+    </div>
+    <div class="card" id="cardMeeting" onclick="launch('meeting', '회의')">
+      <div class="emoji">📝</div>
+      <div class="t">회의진행</div>
+      <div class="d">안건을 먼저 정하고, 내용은 실시간으로 채워집니다</div>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+<script>
+let busy = false;
+
+async function launch(key, label){
+  if(busy) return;
+  busy = true;
+  document.querySelectorAll('.card').forEach(c => c.classList.add('busy'));
+  setStatus(`<span class="spinner"></span>${label} 보조 비서를 준비하는 중입니다… (처음 켤 때는 1분 가까이 걸릴 수 있어요)`);
+
+  try{
+    const r = await (await fetch('/api/launch/' + key, { method: 'POST' })).json();
+    if(r.ok){
+      setStatus(`${label} 화면으로 이동합니다…`);
+      window.location.href = 'http://127.0.0.1:' + r.port;
+      return;
+    }
+    setStatus(r.error || '준비하지 못했습니다.', true);
+  }catch(e){
+    setStatus('서버와 통신 실패: ' + e, true);
+  }
+  busy = false;
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('busy'));
+}
+
+function setStatus(html, err){
+  const el = document.getElementById('status');
+  el.innerHTML = html;
+  el.className = 'status' + (err ? ' err' : '');
+}
+</script>
+</body>
+</html>
