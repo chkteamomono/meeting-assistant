@@ -60,14 +60,13 @@ HERE = Path(__file__).resolve().parent
 PID_PATH = HERE / "실행중.pid"
 PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
 
-# 폴더 구조(이름·깊이)는 사용자가 자주 바꾸므로 하드코딩하지 않고 찾아간다.
-#   인사관리 보조/
-#   ├── 참고자료/직무정보.txt          ← 이걸 기준으로 루트를 잡음
-#   ├── 02. 면접 보조 비서(웹)/         ← 이 프로그램 (HERE)
-#   └── 03. 면접자 정보/                ← 지원자 폴더들의 상위 (LOG_DIR)
-#       ├── 01. 이력서 검토 대상/{이름}/
-#       ├── 02. 면접 대상/{이름}/       ← 드롭다운은 여기만 읽음
-#       └── 03. 면접 종료/{이름}/
+# 데이터 폴더 이름은 사용자가 자주 바꾼다(예: "면접" → "1. 면접관리") — 하드코딩하지
+# 않고, 저장소 루트(소스코드/의 형제) 중 이름에 "면접"이 들어간 폴더를 찾아간다.
+#   <저장소 루트>/
+#   ├── 소스코드/02. 면접 보조 비서 실행하기/   ← 이 프로그램 (HERE)
+#   └── (이름에 "면접" 포함)/
+#       ├── 참고자료/직무정보.txt
+#       └── (이름에 "면접자"·"면접로그" 포함, 또는 "…대상" 단계 폴더를 품은 폴더)/{이름}/
 LOG_PREFIX = "면접점검_"      # 이 프로그램이 만든 로그 파일 접두사(이력서로 오인하지 않기 위함)
 QUESTION_PREFIX = "맞춤질문_"  # 미리 만들어 둔 맞춤 질문 캐시 파일 접두사
 TRANSCRIPT_PREFIX = "면접대화록_"  # 면접 받아쓰기 전문 파일 접두사
@@ -106,13 +105,16 @@ def is_stage_dir(name: str) -> bool:
 
 
 def find_root() -> Path:
-    """코드(공통/)와 데이터(면접/)가 분리된 구조 — 고정된 상대 위치로 데이터 루트를 가리킨다.
-    HERE = <저장소 루트>/공통/02. 면접 보조 비서 실행하기"""
-    return HERE.parent.parent / "면접"
+    """저장소 루트에서 이름에 '면접'이 들어간 폴더를 데이터 루트로 본다."""
+    search_base = HERE.parent.parent  # 저장소 루트 (소스코드/의 부모)
+    candidates = sorted(d for d in search_base.iterdir() if d.is_dir() and "면접" in d.name)
+    return candidates[0] if candidates else search_base / "면접"
 
 
 def find_log_dir(root: Path) -> Path:
-    """지원자 폴더들이 들어 있는 상위 폴더를 찾는다 (예: '03. 면접자 정보')."""
+    """지원자 폴더들이 들어 있는 상위 폴더를 찾는다 (예: '02. 면접자 정보')."""
+    if not root.is_dir():
+        return root / "면접자 정보"
     dirs = sorted(p for p in root.iterdir() if p.is_dir())
     # 1순위: '면접 대상' 류의 단계 폴더를 품고 있는 폴더
     for d in dirs:
@@ -125,7 +127,7 @@ def find_log_dir(root: Path) -> Path:
     for d in dirs:
         if "면접자" in d.name or "면접로그" in d.name:
             return d
-    return root / "03. 면접자 정보"
+    return root / "면접자 정보"
 
 
 ROOT = find_root()

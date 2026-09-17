@@ -78,11 +78,11 @@ HERE = Path(__file__).resolve().parent
 PID_PATH = HERE / "실행중.pid"
 PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
 
-# 폴더 구조(이름·깊이)는 사용자가 자주 바꾸므로 하드코딩하지 않고 찾아간다.
-#   회의 보조 에이전트/
-#   ├── 참고자료/받아쓰기_용어.txt, 회의록_형식.txt   ← 이걸 기준으로 루트를 잡음
-#   ├── 02. 회의 보조 비서 실행하기/                   ← 이 프로그램 (HERE)
-#   └── 03. 회의 기록/                                  ← 회의별 결과 폴더가 쌓이는 곳
+# 데이터 폴더 이름은 사용자가 자주 바꾼다(예: "회의관리" → "2. 회의관리") — 하드코딩하지
+# 않고, 저장소 루트(소스코드/의 형제) 중 이름에 "회의관리"가 들어간 폴더를 찾아간다.
+#   <저장소 루트>/
+#   ├── 소스코드/02. 회의 보조 비서 실행하기/   ← 이 프로그램 (HERE)
+#   └── (이름에 "회의관리" 포함)/참고자료, (이름에 "회의 기록" 포함)/ 등  ← 데이터
 TRANSCRIPT_PREFIX = "회의녹취록_"
 CORRECTED_TRANSCRIPT_PREFIX = "회의녹취록_보정_"
 RECORDING_PREFIX = "원본음성_"
@@ -92,16 +92,28 @@ MEMO_PREFIX = "메모_"
 
 
 def find_root() -> Path:
-    """코드(공통/)와 데이터(회의관리/)가 분리된 구조 — 고정된 상대 위치로 데이터 루트를 가리킨다.
-    HERE = <저장소 루트>/공통/02. 회의 보조 비서 실행하기"""
-    return HERE.parent.parent / "회의관리"
+    """저장소 루트에서 이름에 '회의관리'가 들어간 폴더를 데이터 루트로 본다."""
+    search_base = HERE.parent.parent  # 저장소 루트 (소스코드/의 부모)
+    candidates = sorted(d for d in search_base.iterdir() if d.is_dir() and "회의관리" in d.name)
+    return candidates[0] if candidates else search_base / "회의관리"
+
+
+def find_meeting_log_dir(root: Path) -> Path:
+    """회의별 결과 폴더가 쌓이는 곳 — 이름에 '회의 기록'이 들어간 폴더를 찾는다.
+    없으면(최초 실행) 기본 이름으로 새로 만든다."""
+    if root.is_dir():
+        candidates = sorted(d for d in root.iterdir() if d.is_dir() and "회의 기록" in d.name)
+        if candidates:
+            return candidates[0]
+    default = root / "03. 회의 기록"
+    default.mkdir(parents=True, exist_ok=True)
+    return default
 
 
 ROOT = find_root()
 VOCAB_PATH = ROOT / "참고자료" / "받아쓰기_용어.txt"        # 받아쓰기에 미리 알려줄 업무 용어
 MINUTES_FORMAT_PATH = ROOT / "참고자료" / "회의록_형식.txt"  # 회의록 작성 규칙(없으면 내장 규칙)
-DEFAULT_MEETING_LOG_DIR = ROOT / "03. 회의 기록"
-DEFAULT_MEETING_LOG_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_MEETING_LOG_DIR = find_meeting_log_dir(ROOT)
 SETTINGS_PATH = ROOT / "설정.json"
 
 HOST = "127.0.0.1"
